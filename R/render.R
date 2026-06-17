@@ -30,13 +30,18 @@ render_journey_plot <- function(boxes, events, opts) {
   # Midline y for event points
   midline_y <- box_height / 2
 
-  # Shrink each box's rendered xmax by box_gap_prop of its own width to create
-  # a thin visual gap between adjacent boxes. Stored xmax/duration are unchanged.
-  # Trade-off: gap is proportional to box width, so very short stays get a
-  # proportionally smaller gap — this is intentional to avoid invisibly thin boxes.
+  # Shrink each box's rendered xmax by a fixed number of seconds so all gaps
+  # are the same absolute width on screen. The gap is expressed as a proportion
+  # of the TOTAL journey span (not each box's own width), ensuring consistency
+  # regardless of how long individual stays are.
+  # Guard with pmax so a very short box can never render with negative width.
+  gap_secs <- total_span_secs * box_gap_prop
   boxes <- dplyr::mutate(
     boxes,
-    xmax_render = xmax - (xmax - xmin) * box_gap_prop
+    xmax_render = xmin + pmax(
+      as.numeric(xmax - xmin, units = "secs") - gap_secs,
+      gap_secs   # minimum render width = one gap unit
+    )
   )
 
   # ── Colour scales ──────────────────────────────────────────────────────────
