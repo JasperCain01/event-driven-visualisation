@@ -42,7 +42,10 @@ plot_patient_journey <- function(
     event_palette    = NULL,
 
     # Visual geometry
-    box_height = 1,
+    box_height    = 0.25,
+    # Proportion of each box's width trimmed from its right edge to create a
+    # thin visual gap between adjacent locations. Purely cosmetic.
+    box_gap_prop  = 0.015,
 
     # Plot title — NULL auto-generates from case_id / K_Number
     title = NULL,
@@ -103,6 +106,7 @@ plot_patient_journey <- function(
     location_palette = location_palette,
     event_palette    = event_palette,
     box_height       = box_height,
+    box_gap_prop     = box_gap_prop,
     title            = title
   )
 

@@ -17,6 +17,7 @@ render_journey_plot <- function(boxes, events, opts) {
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
+  box_gap_prop     <- opts$box_gap_prop
   plot_title       <- opts$title
 
   # ── Derived layout values ──────────────────────────────────────────────────
@@ -26,9 +27,17 @@ render_journey_plot <- function(boxes, events, opts) {
   date_breaks <- choose_date_breaks(total_span_secs)
   date_labels <- choose_date_labels(total_span_secs)
 
-  # Midline y for event points: slightly below centre so location labels sit above
-  midline_y    <- box_height * 0.45
-  label_y      <- box_height * 0.82  # y for location name text inside box
+  # Midline y for event points
+  midline_y <- box_height / 2
+
+  # Shrink each box's rendered xmax by box_gap_prop of its own width to create
+  # a thin visual gap between adjacent boxes. Stored xmax/duration are unchanged.
+  # Trade-off: gap is proportional to box width, so very short stays get a
+  # proportionally smaller gap — this is intentional to avoid invisibly thin boxes.
+  boxes <- dplyr::mutate(
+    boxes,
+    xmax_render = xmax - (xmax - xmin) * box_gap_prop
+  )
 
   # ── Colour scales ──────────────────────────────────────────────────────────
   loc_levels <- unique(boxes$location)
@@ -44,38 +53,21 @@ render_journey_plot <- function(boxes, events, opts) {
   p <- ggplot2::ggplot() +
 
     # ── Layer 1: location boxes ──────────────────────────────────────────────
-    # geom_rect needs xmin/xmax as numeric for datetime axes — coerce inline.
-    # Trade-off: ggplot2's datetime handling for geom_rect requires this;
-    # coercing here keeps box data as POSIXct everywhere else.
+    # Uses xmax_render (= xmax minus a small gap proportion) so adjacent boxes
+    # are visually separated. The gap is purely cosmetic — stored xmax/duration
+    # values reflect the true clinical interval.
     ggplot2::geom_rect(
       data = boxes,
       ggplot2::aes(
         xmin  = xmin,
-        xmax  = xmax,
+        xmax  = xmax_render,
         ymin  = ymin,
         ymax  = ymax,
         fill  = location
       ),
-      colour = "grey40",   # thin border separates adjacent same-coloured boxes
-      linewidth = 0.3,
-      alpha  = 0.82
-    ) +
-
-    # ── Layer 2: location name labels ────────────────────────────────────────
-    # Placed at the top of the box (label_y) so they don't clash with midline
-    # event points. Long names are clipped by the box edge — a future extension
-    # could use ggfittext for shrink-to-fit behaviour.
-    ggplot2::geom_text(
-      data = boxes,
-      ggplot2::aes(
-        x     = xmin + (xmax - xmin) / 2,
-        y     = label_y,
-        label = location
-      ),
-      size     = 3.2,
-      fontface = "bold",
-      colour   = "grey15",
-      vjust    = 0.5
+      colour    = NA,    # no border needed — gap between boxes provides separation
+      linewidth = 0,
+      alpha     = 0.85
     )
 
   # ── Layer 3: instantaneous event points ──────────────────────────────────
