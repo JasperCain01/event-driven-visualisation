@@ -1,13 +1,30 @@
 # Implementation Plan — `eventviz` (working name)
 
 This plan turns the current single-file-sourced set of R scripts into a proper,
-general-purpose event-log visualisation package. It assumes every improvement
-discussed in review is implemented, plus one addition: a wide→long pivot
-helper (Stage 2) for datasets that arrive as one row per case with a column
-per milestone timestamp.
+general-purpose event-log visualisation package.
 
-Package name `eventviz` is a placeholder — rename freely in Stage 0, everything
-downstream is name-agnostic.
+**Revision 2 (2026-07-04).** Amended after an executed review (R 4.3.3, full
+test suite + rendered-output inspection) found eight defects the original
+read-only review missed, plus internal contradictions in revision 1 of this
+plan. Changes in this revision:
+
+- **Stage 0.5 (defect fixes) added — and already IMPLEMENTED** in the same
+  commit as this revision. Nine defects fixed with 21 regression tests.
+- **Stage 1.5 (visual baselines) added**: vdiffr snapshots are captured right
+  after the visual quick wins, *before* the refactor-heavy stages they exist
+  to protect — not at the end (revision 1 would have snapshotted broken
+  behaviour as the baseline).
+- **Stage 5b (linear stage processes) added**: first-class support for
+  location-less linear journeys (complaints, approvals, ticket pipelines),
+  including a staircase layout and a complaint example dataset.
+- Stage 1f palette spec corrected (revision 1 gave locations and events
+  identical colours); backward-compatibility decision de-contradicted;
+  vertical layout budget added; Stage 3 autodetect made unambiguous;
+  Stage 5's renderer refactor made explicit; Stage 6 statistics now respect
+  the `end_inferred` flag and support per-stage breach targets;
+  machine-checkable render gates added to every render-touching stage.
+
+Package name `eventviz` is a placeholder — rename freely in Stage 0.
 
 ## How to read this plan
 
@@ -27,51 +44,80 @@ Each stage has:
 | 🟡 FRONTIER-DESIGN-THEN-LOCAL | A design decision is required first. This plan already makes that call where possible — where it says "frontier should confirm," a quick review is enough; implementation afterward is 🟢. |
 | 🔴 FRONTIER-REQUIRED | Needs ongoing judgment (visual QA, statistical/visual-encoding design, architecture with real regression risk). Should be driven or closely reviewed by a frontier model throughout, not just checked at the end. |
 
+### Universal acceptance gate (applies to EVERY render-touching stage)
+
+The original `show_labels` bug shipped because the code ran without error
+while silently dropping every label. To make that class of failure
+machine-detectable — essential when delegating to local models — **every
+stage that adds or changes a render path must include this assertion in its
+tests**:
+
+```r
+expect_no_warning(ggplot2::ggplot_build(p))
+```
+
+A ggplot warning at build time ("Removed N rows…", scale clashes, etc.) is a
+test failure, full stop. `tests/testthat/test-fixes.R` shows the pattern.
+
 ### Design decisions locked in (so no stage re-litigates them)
 
-1. **Swimlanes ≠ multi-case.** Concurrent event tracks *within one case* (Stage 4)
-   and *comparing across cases* (Stage 5) are different axes and use different
-   mechanisms: swimlanes generalise the existing `assign_y_bands`/`band_index`
-   machinery; cohort comparison uses `ggplot2::facet_wrap()`. Conflating them
-   into one y-stacking system was rejected as higher-risk for no benefit.
+1. **Swimlanes ≠ multi-case.** Concurrent event tracks *within one case*
+   (Stage 4) and *comparing across cases* (Stage 5) are different axes:
+   swimlanes generalise the existing `assign_y_bands` machinery; cohort
+   comparison uses `ggplot2::facet_wrap()`.
 2. **Cohort view is a new function**, `plot_journey_cohort()`, not an overload
-   of `case_id` inside `plot_patient_journey()`. Keeps the existing, well-tested
-   single-case path completely untouched.
-3. **Interactive renderer uses `ggiraph`, not `plotly`.** `ggiraph` decorates
-   existing ggplot2 geoms (`geom_rect_interactive`, `geom_point_interactive`)
-   rather than translating the whole plot through a converter, so it survives
-   `ggrepel`/custom themes without surprises.
-4. **No new heavy dependencies for v1 of the transition diagram** — hand-rolled
-   with `geom_segment`, not `ggalluvial`/`networkD3`. Flagged as a v2 stretch
-   goal if the simple version isn't expressive enough once real data is tried.
-5. **Backward compatibility is non-negotiable.** Every new feature is opt-in
-   via a new parameter with a default that reproduces current behaviour
-   exactly, or lives in a new function. Existing tests must keep passing
-   unmodified through every stage.
-6. License placeholder: MIT. Change in Stage 0 if the user wants otherwise.
+   of `case_id` inside `plot_patient_journey()`.
+3. **Interactive renderer uses `ggiraph`, not `plotly`** — it decorates
+   existing ggplot2 geoms rather than translating the whole plot.
+4. **No new heavy dependencies for v1 of the transition diagram** —
+   hand-rolled with `geom_segment`; `ggalluvial` is a v2 stretch goal.
+5. **Backward compatibility, amended.** Every new feature is opt-in with a
+   default reproducing current behaviour, *with exactly two sanctioned
+   exceptions*, both landing in the 0.1.0 packaging milestone and called out
+   in NEWS.md: (a) the Stage 0.5 defect fixes (broken behaviour is not
+   API surface — e.g. labels now render, `duration` now stores the true
+   value); (b) the Stage 1f default palette change. Nothing else may alter
+   default output; existing tests keep passing unmodified through every
+   stage.
+6. **Vertical layout budget.** Three features want space above the location
+   band. They MUST use these reserved y-ranges (in units of `box_height` = h,
+   band occupying `[0, h]`) and nothing else:
+
+   | y-range | Reserved for | Stage |
+   |---|---|---|
+   | `[0, h]` | Location boxes + event midline | existing |
+   | `< 0` (lower expansion) | ggrepel event labels | existing (fixed in 0.5) |
+   | `[h, 1.12h]` | Duration labels (`y = 1.04h`, vjust 0) + terminal-marker labels | 1a / 0.5 |
+   | `[1.12h, 1.3h]` | Reference-line labels (`y = 1.14h`, vjust 0) | 1b |
+   | `[1.3h + lane_gap, …]` | Swimlanes stack upward from `1.3h` | 4 |
+
+   Any stage needing new vertical space amends this table first, in its own
+   PR, so collisions are caught at review time rather than render time.
+7. License placeholder: MIT. Change in Stage 0 if the user wants otherwise.
 
 ### Stage order and dependency graph
 
 ```
-Stage 0  (package scaffolding)
+Stage 0    (package scaffolding)
+Stage 0.5  (defect fixes)  ✅ DONE — implemented pre-scaffolding with tests
    |
-   +--> Stage 1 (visual quick wins)   -----+
-   +--> Stage 2 (pivot wrapper)             \
-   +--> Stage 3 (schema/autodetect)          >-- can run in parallel, all depend only on Stage 0
-                                             /
-   Stage 3 --> Stage 4 (swimlanes)  <-------+
-   Stage 4 --> Stage 5 (cohort facets)
-   Stage 5 --> Stage 6 (aggregate/statistical views)
-   Stage 1,4 --> Stage 7 (interactive renderer)
-   Stage 5,8 --> Stage 8 (generalisation polish)
-   all      --> Stage 9 (test hardening / visual regression)
-   all      --> Stage 10 (docs / pkgdown)
+   +--> Stage 1  (visual quick wins) --> Stage 1.5 (vdiffr baselines)
+   +--> Stage 2  (pivot wrapper)          } 1, 2, 3 parallel-safe after 0
+   +--> Stage 3  (schema/autodetect)      }
+                                   
+   Stage 1.5 + 3 --> Stage 4  (swimlanes)
+   Stage 4       --> Stage 5  (cohort facets)
+   Stage 5       --> Stage 5b (linear stage processes / staircase)
+   Stage 5b      --> Stage 6  (aggregate/statistical views)
+   Stage 1.5 + 4 --> Stage 7  (interactive renderer)
+   Stage 5b      --> Stage 8  (generalisation polish)
+   all           --> Stage 9  (test gap-closing)
+   all           --> Stage 10 (docs / pkgdown)
 ```
 
-If parallelising across multiple model instances, Stages 1, 2 and 3 are safe
-to run concurrently (independent files, independent tests). Everything from
-Stage 4 onward should be sequential — each stage edits `render.R` and/or
-`plot_patient_journey.R`, so parallel edits there will conflict.
+Stages 1, 2, 3 may run concurrently (independent files). Everything from
+Stage 4 onward is sequential — each edits `render.R` and/or
+`plot_patient_journey.R`.
 
 ---
 
@@ -91,41 +137,92 @@ added to existing `R/*.R` files.
    - `Imports: dplyr, tibble, ggplot2, ggrepel, cli, lubridate, rlang, stats, utils`
    - `Suggests: testthat (>= 3.0.0), RColorBrewer, tidyr, ggiraph, patchwork, vdiffr, knitr, rmarkdown`
    - `Config/testthat/edition: 3`
-2. Add roxygen2 `#'` blocks above every currently-exported-worthy function
-   (`plot_patient_journey`, and `example_journey` as package data) with
-   `@param`, `@return`, `@export`, one `@examples` block each. Internal helpers
-   (`derive_location_boxes`, `journey_palette`, etc.) get `@keywords internal`
-   or `@noRd`, not `@export`.
-3. Run `roxygen2::roxygenise()` to generate `NAMESPACE` and `man/*.Rd`. Do not
+2. Add roxygen2 `#'` blocks above every exported function
+   (`plot_patient_journey`, `example_journey` as data) with `@param`,
+   `@return`, `@export`, one `@examples` block each. Documentation must cover
+   the Stage 0.5 additions: `tz`, `terminal_activities`, `patient_col = NULL`
+   support, and the `terminal`/`end_inferred`/`xmin_render` columns of the
+   `boxes` table returned by `return_data = TRUE`. Internal helpers get
+   `@keywords internal` or `@noRd`.
+3. Run `roxygen2::roxygenise()` to generate `NAMESPACE` and `man/*.Rd`. Never
    hand-write `NAMESPACE`.
-4. Move `example_journey` into proper package data: create `data-raw/example_journey.R`
-   containing the existing `make_example_journey()` body, call
-   `usethis::use_data(example_journey, overwrite = TRUE)`, delete the old
-   `R/example_data.R` `source()`-based version once `data/example_journey.rda`
-   exists and is documented via a `R/data.R` file with a `#'` roxygen block.
-5. Update `tests/testthat/test-*.R`: remove all `source("../../R/....R")` lines
-   at the top of each test file — a real package's tests run against the
-   loaded namespace, not manual sourcing. Add `tests/testthat.R`:
-   ```r
-   library(testthat)
-   library(eventviz)
-   test_check("eventviz")
-   ```
-6. Add `.Rbuildignore` entries for `IMPLEMENTATION_PLAN.md`, `data-raw/`,
-   `.github/`.
-7. Add `.github/workflows/R-CMD-check.yaml` using the standard
-   `usethis::use_github_action("check-standard")` template.
-8. Add `LICENSE`/`LICENSE.md` (MIT, `usethis::use_mit_license()` template).
+4. Move `example_journey` into package data: `data-raw/example_journey.R`
+   with the existing `make_example_journey()` body,
+   `usethis::use_data(example_journey, overwrite = TRUE)`, document in
+   `R/data.R`, delete the `source()`-based `R/example_data.R`.
+5. Update `tests/testthat/test-*.R`: remove the `source("../../R/…")` headers
+   (including from `test-fixes.R`); add `tests/testthat.R` with the standard
+   `test_check("eventviz")` body.
+6. `.Rbuildignore`: `IMPLEMENTATION_PLAN.md`, `data-raw/`, `.github/`.
+7. `.github/workflows/R-CMD-check.yaml` from the `check-standard` template.
+8. `LICENSE`/`LICENSE.md` (MIT).
 
-**Tests:** none new — the point of this stage is that the *existing* test
-suite passes unchanged under `devtools::test()`, and `devtools::check()` runs
-clean (0 errors, 0 warnings; NOTEs acceptable at this point).
+**Tests:** none new — the existing suite (including `test-fixes.R`) passes
+unchanged under `devtools::test()`; `devtools::check()` runs 0 errors /
+0 warnings.
 
 **Definition of done**
 - [ ] `devtools::load_all()` succeeds
 - [ ] `devtools::test()` — all pre-existing tests pass, none skipped
 - [ ] `devtools::check()` — 0 errors, 0 warnings
-- [ ] `example_journey` accessible as `eventviz::example_journey` without sourcing
+- [ ] `example_journey` accessible as `eventviz::example_journey`
+
+---
+
+## Stage 0.5 — Defect fixes ✅ COMPLETE
+
+**Status: implemented and tested in the same commit as this plan revision**,
+ahead of scaffolding, because later stages build on the corrected semantics
+and Stage 1.5's baselines must capture *fixed* behaviour. 21 regression
+tests in `tests/testthat/test-fixes.R`; full suite 72 passing.
+
+What was fixed (defect → fix → where):
+
+1. **`show_labels = TRUE` silently dropped every label** (labels nudged below
+   hard `scale_y_continuous(limits=…)` were censored to NA). Fixed by
+   removing the hard limits and expanding the lower y-range only when labels
+   will actually render. `R/render.R`.
+2. **Terminal states were extended into fake stays** (example data showed a
+   ~4.75 h "Discharged" box invented by the median tail fallback). New
+   opt-in `terminal_activities` parameter: a terminal final move gets zero
+   duration and renders as a vertical marker with an italic direct label,
+   outside the fill legend. `R/plot_patient_journey.R`, `R/transform.R`,
+   `R/render.R`.
+3. **The zero-width-nudge message lied** ("Stored duration is unaffected"
+   while duration was computed *after* the nudge). `duration` is now computed
+   before nudging (a same-timestamp stay stores 0) and the message says so.
+   `R/transform.R`.
+4. **A nudged box was hidden behind its successor** (same-timestamp moves).
+   New render-only `xmin_render` stagger; true `xmin` untouched so event
+   assignment is unaffected. Known limitation: 3+ moves sharing one
+   timestamp still compress to sliver widths — acceptable, documented.
+   `R/transform.R`, `R/render.R`.
+5. **Three cryptic crash paths** now abort cleanly with actionable messages:
+   typo'd `tail_strategy` (`match.arg`, `R/utils.R`); `exclude_categories`
+   removing every location event (post-exclusion re-check,
+   `R/plot_patient_journey.R`, plus a defensive n_boxes==0 guard in
+   `R/transform.R`); vector/NA `case_id` (scalar guard, `R/validate.R`).
+6. **Character timestamps were silently parsed as UTC.** New `tz` parameter
+   threaded through to `lubridate::as_datetime(…, tz = tz)`; POSIXct input
+   keeps its own tzone. `R/plot_patient_journey.R`, `R/validate.R`.
+7. **`patient_col` was mandatory.** `patient_col = NULL` now supported for
+   logs with no secondary identifier; title falls back to `"Case <id>"`.
+   `R/validate.R`, `R/plot_patient_journey.R`.
+8. **Legend clipping/truncation** (two side-by-side legends overflowed plot
+   width). Legends now stack vertically. `R/render.R`.
+9. **Bonus defect found while fixing 5:** the row-drop notification called
+   `cli::cli_inform("i" = …)` with no `message` argument — meaning
+   `exclude_categories` crashed on *every* use that dropped rows. Wrapped in
+   `c()`. `R/plot_patient_journey.R`.
+
+Also added: `end_inferred` flag on every box (TRUE only for a non-terminal
+final box) so Stage 6 statistics can exclude imputed ends; dead
+`box_id = .orig_row` pseudo-traceability code removed.
+
+Deliberately NOT fixed here: the Set2/Dark2 palette-hue pairing (Stage 1f
+owns the palette change under locked decision 5's sanctioned exception) and
+the `attr(events, "pre_box")` handoff (works, relies on dplyr attribute
+preservation; replace with an explicit list return in Stage 9 cleanup).
 
 ---
 
@@ -137,122 +234,150 @@ final combined visual QA pass (render one plot with everything switched on at
 once and eyeball it for layer collisions).
 
 **Files:** `R/render.R`, `R/transform.R`, `R/utils.R`, `R/plot_patient_journey.R`,
-new `tests/testthat/test-render.R` (first-ever tests for `render.R`).
+`tests/testthat/test-render.R` (new).
 
 ### 1a. Duration labels on boxes
 
-- Add `format_duration(secs)` to `utils.R`: numeric seconds → compact string.
-  - `< 60` → `"Ns"`; `< 3600` → `"Nm"`; `< 86400` → `"Hh Mm"` (drop the minutes
-    part if zero, e.g. `"4h"` not `"4h 0m"`); `>= 86400` → `"Dd Hh"`.
-- Add `show_duration = FALSE` to `plot_patient_journey()` and thread through
+- Add `format_duration(secs)` to `utils.R`: `< 60` → `"Ns"`; `< 3600` → `"Nm"`;
+  `< 86400` → `"Hh Mm"` (drop zero minutes); `>= 86400` → `"Dd Hh"`.
+- Add `show_duration = FALSE` to `plot_patient_journey()`, thread through
   `opts`.
-- In `render_journey_plot()`, when `show_duration` is `TRUE`, add
-  `ggplot2::geom_text()` using `boxes` data: `x = xmin + (xmax_render - xmin)/2`,
-  `y = ymax + 0.03`, `label = format_duration(as.numeric(duration, units = "secs"))`,
-  `size = 2.6`, `colour = "grey30"`.
+- When `TRUE`: `geom_text()` on non-terminal boxes,
+  `x = xmin_render + (xmax_render - xmin_render)/2`,
+  **`y = box_height * 1.04`, vjust 0** (layout budget row 3 — NOT ymax+0.03
+  as in plan revision 1), `label = format_duration(…)`, size 2.6,
+  colour grey30. Boxes with `end_inferred` append `"+"` to the label (e.g.
+  `"4h 45m+"`) — the end is imputed and the label must not overclaim.
 
 ### 1b. Reference-line / target-threshold layer
 
-- New param `reference_lines = NULL` on `plot_patient_journey()`: a tibble/
-  data frame with columns `offset_hours` (numeric, relative to the first
-  event's timestamp) and `label` (character). Validate: if supplied and not a
-  data frame with both columns, `cli::cli_abort()`.
-- In `render_journey_plot()`, when non-NULL: compute
-  `x = min(boxes$xmin) + offset_hours * 3600`, add
-  `ggplot2::geom_vline(xintercept = x, linetype = "dashed", colour = "firebrick", linewidth = 0.5)`
-  and `ggplot2::annotate("text", x = x, y = box_height * 1.1, label = label, colour = "firebrick", size = 2.8, angle = 90, hjust = 0)`.
+- `reference_lines = NULL`: data frame with `offset_hours` (numeric, from
+  first event) and `label`. Validate shape, else `cli_abort`.
+- Renders `geom_vline` (dashed, firebrick) plus text at
+  **`y = box_height * 1.14`, vjust 0** (layout budget row 4), size 2.8.
+  Horizontal text, `hjust = -0.05` (just right of the line) — angled text was
+  revision-1 speculation; confirm orientation in the 1-final QA pass.
 
-### 1c. Visual distinction for an open/ongoing final box
+### 1c. Ongoing-spell indication
 
-- New param `end_categories = NULL` (character vector of `activity` values
-  that count as a true terminal state, e.g. `c("Discharged", "Deceased")`).
-- In `derive_location_boxes()` (or a thin wrapper called right after), compute
-  `spell_open <- !is.null(end_categories) && !(location[n] %in% end_categories)`.
-  Attach as `attr(boxes, "spell_open")`.
-  Default (`end_categories = NULL`) → `spell_open` always `FALSE`, i.e. current
-  behaviour is unchanged.
-- In `render_journey_plot()`: if `attr(boxes, "spell_open")` is `TRUE`, draw
-  the final box's right edge as a dashed `geom_segment` at its true `xmax`
-  (not `xmax_render`) and add a small `"(ongoing)"` text annotation just past
-  it.
+Builds on Stage 0.5's `terminal_activities` (which handles the *reached*
+terminal state). This sub-feature handles the converse: **the case never
+reached a terminal state** — the data feed just stopped.
+- When `terminal_activities` is supplied AND the final location is NOT in it,
+  set `attr(boxes, "spell_open") <- TRUE` in `derive_location_boxes()`.
+- Render: final box's right edge drawn as a dashed vertical `geom_segment`
+  at `xmax` plus an italic `"(ongoing)"` annotation at
+  `y = box_height * 1.04` right-aligned to `xmax`.
+- `terminal_activities = NULL` (default) → attribute FALSE → no visual change.
 
 ### 1d. Direct box labelling
 
-- New param `label_boxes = FALSE`.
-- When `TRUE`, add `ggplot2::geom_text(data = boxes, aes(x = xmin + (xmax_render - xmin)/2, y = box_height/2, label = location), size = 2.6, colour = "grey15", check_overlap = TRUE)`.
-  `check_overlap = TRUE` is a cheap built-in way to silently drop labels that
-  would collide — no new dependency needed.
+- `label_boxes = FALSE`. When `TRUE`: `geom_text` at box centres
+  (`y = box_height/2 + 0.06`, nudged off the event midline), size 2.6,
+  `check_overlap = TRUE` to silently drop colliding labels — no new
+  dependency.
 
 ### 1e. High-cardinality event-type bucketing
 
-- New param `event_type_top_n = NULL` (integer). When set and the number of
-  distinct `act_type` values in `events` exceeds it, keep the top N most
-  frequent as-is and recode the rest to `"Other"` before the colour/shape
-  scales are built in `render_journey_plot()`. Emit `cli::cli_inform()` stating
-  how many event types were collapsed and their names.
+- `event_type_top_n = NULL`. When set and distinct `act_type` count exceeds
+  it: keep top-N by frequency, recode the rest to `"Other"`, before colour/
+  shape scales are built. `cli_inform` names the collapsed types.
 
-### 1f. Colourblind-safe default palette
+### 1f. Colourblind-safe default palette — CORRECTED SPEC
 
-- In `journey_palette()` (`utils.R`), add `palette_style = c("colourblind", "brewer")` param, default `"colourblind"`.
-  - `"colourblind"`: use the 8-colour Okabe-Ito set (hardcode the hex values,
-    no new dependency), recycled via `grDevices::colorRampPalette()` if `n > 8`.
-  - `"brewer"`: existing Set2/Dark2 behaviour, kept for backward compatibility
-    (some users may already depend on the exact old colours).
-- Thread `palette_style` through as an optional `plot_patient_journey()` param
-  defaulting to `"colourblind"` — note in the roxygen docs that this changes
-  default colours versus any prior 0.0.x usage (acceptable since this is a
-  0.1.0 packaging milestone).
+Revision 1 applied the same Okabe-Ito set to both palettes, which would give
+location 1 and event-type 1 *identical* colours — worse than today's
+matched-hue Set2/Dark2 problem. Corrected:
 
-**Tests (`tests/testthat/test-render.R`, new file):**
-- `format_duration()` exact-string tests for boundary values: 0s, 59s, 60s,
-  3599s, 3600s, 3660s, 86399s, 86400s, 90000s.
-- Use `ggplot2::ggplot_build(p)` to assert layer *count* and *presence* rather
-  than pixel comparison: e.g. `show_duration = TRUE` adds exactly one more
-  `GeomText` layer than `show_duration = FALSE`; `reference_lines` adds a
-  `GeomVline` layer only when supplied; `end_categories` triggers the dashed
-  segment only when the last location isn't in the set; `label_boxes` adds a
-  `GeomText` layer; `event_type_top_n` collapses distinct colour levels to
-  `top_n + 1` (the `+1` is `"Other"`).
-- `journey_palette(letters[1:3], "location", palette_style = "colourblind")`
-  returns 3 unique hex colours; `palette_style = "brewer"` reproduces prior
-  Set2 output exactly (regression-protects existing behaviour for anyone
-  pinning it).
+- `journey_palette()` gains `palette_style = c("okabe", "brewer")`, default
+  `"okabe"`.
+- `"okabe"`, locations (fills): the 8 Okabe-Ito colours **lightened 40%
+  toward white** via `colorspace::lighten()` if available else
+  `grDevices::colorRampPalette(c(col, "white"))(5)[3]` per colour (no new
+  hard dependency).
+- `"okabe"`, events (points): the saturated Okabe-Ito originals **offset by
+  4 positions** (event 1 gets colour 5, wrapping) so co-indexed
+  location/event pairs never share a hue.
+- `"brewer"`: existing Set2/Dark2, kept verbatim for anyone pinning old
+  colours.
+- This is sanctioned exception (b) of locked decision 5: the ONE intentional
+  default-output change outside Stage 0.5. NEWS.md entry required.
+
+**Tests (`test-render.R`):**
+- `format_duration()` exact strings at 0, 59, 60, 3599, 3600, 3660, 86399,
+  86400, 90000 secs.
+- `ggplot_build()` layer-count assertions per feature toggle (each feature
+  adds exactly its expected layer; defaults add none).
+- Universal render gate on a plot with ALL Stage 1 features enabled at once.
+- `"okabe"`: assert `setdiff(loc_colours, evt_colours)` has no common hex;
+  `"brewer"` reproduces prior Set2/Dark2 output exactly.
+- `end_inferred` boxes get the `"+"` duration suffix; terminal boxes get no
+  duration label.
 
 **Definition of done**
-- [ ] All six sub-features implemented behind opt-in params, defaults preserve
-      current plot output exactly (verify: `render_journey_plot()` called with
-      no new params on `example_journey` produces the same `ggplot_build()`
-      layer list as before this stage)
-- [ ] `test-render.R` passing
-- [ ] One manual `ggplot2::ggsave()` of a plot with every new feature enabled
-      at once, reviewed by a frontier pass for layer collisions/illegible text
+- [ ] All six features opt-in; with defaults, `ggplot_build()` layer list
+      identical to Stage 0.5 output except palette hexes (1f)
+- [ ] Universal render gate passes with all features on simultaneously
+- [ ] One combined `ggsave()` render visually reviewed by a frontier pass
+
+---
+
+## Stage 1.5 — Visual regression baselines (vdiffr)
+
+**Depends on:** Stage 1
+**Model tag:** 🔴 FRONTIER-REQUIRED — a baseline nobody has looked at is
+worthless; every snapshot must be rendered and visually confirmed once
+before committing.
+
+Moved from the end of the plan (revision 1's Stage 9) to here: baselines
+must exist **before** the refactor-heavy stages (4, 5, 7, 8) they protect,
+and must capture post-0.5 *fixed* behaviour.
+
+**Files:** `tests/testthat/test-render-snapshots.R`, `DESCRIPTION` (vdiffr →
+Suggests).
+
+**Snapshots on `example_journey`** (each `vdiffr::expect_doppelganger()`,
+descriptively named):
+1. default plot
+2. `show_labels = TRUE` (with `exclude_categories = c("obs","test_ordered")`
+   so the snapshot stays legible)
+3. `show_duration = TRUE`
+4. `label_boxes = TRUE`
+5. `terminal_activities = "Discharged"`
+6. `reference_lines` with one 4-hour target
+7. everything on at once
+
+**Definition of done**
+- [ ] All seven baselines committed AFTER a frontier pass has rendered and
+      visually approved each one
+- [ ] CI runs them (vdiffr skips gracefully where unavailable)
 
 ---
 
 ## Stage 2 — Wide-to-long pivot wrapper
 
-**Depends on:** Stage 0 (needs the package structure; otherwise fully
-independent of Stages 1/3)
-**Model tag:** 🟢 LOCAL-OK (signature is fully specified below; a frontier
-pass already made the API calls so there's nothing left to design)
+**Depends on:** Stage 0 (and benefits from 0.5's fixes: wide milestone data
+routinely contains equal timestamps in adjacent columns, which lands directly
+on the nudge/stagger paths fixed there)
+**Model tag:** 🟢 LOCAL-OK, except the `coerce_datetime_column()` extraction
+touches shared validation code — run the full suite after that refactor
+before writing any new code.
 
-**Files:** new `R/pivot_wide.R`, new `tests/testthat/test-pivot.R`, small
-refactor extracting a shared helper from `validate.R` into `utils.R`.
+**Files:** new `R/pivot_wide.R`, new `tests/testthat/test-pivot.R`, shared
+helper extracted from `validate.R` into `utils.R`.
 
 **Prerequisite micro-refactor:** extract the timestamp-coercion block from
-`validate_event_log()` (the `lubridate::as_datetime()` + NA-detection logic,
-`validate.R` lines ~62–78) into a shared helper in `utils.R`:
+`validate_event_log()` into `utils.R`:
 
 ```r
-coerce_datetime_column(x, col_label) {
-  # returns coerced POSIXct vector, or cli_abort()s naming which values failed
-}
+coerce_datetime_column(x, col_label, tz = "UTC")
+# returns coerced POSIXct, or cli_abort()s naming which values failed
 ```
 
-Update `validate_event_log()` to call it. This is a pure refactor — behaviour
-and all existing `test-validate.R` cases must be unchanged.
+`validate_event_log()` calls it (passing its `tz` through). Pure refactor —
+`test-validate.R` and `test-fixes.R` must pass unchanged.
 
-**New function signature:**
+**New function:**
 
 ```r
 pivot_events_longer(
@@ -260,10 +385,11 @@ pivot_events_longer(
   case_col,
   time_cols,                 # character vector of wide column names to pivot
   patient_col     = NULL,
-  location_cols   = NULL,    # subset of time_cols; these become act_type "location_move"
-  act_type_map    = NULL,    # named character vector: names = time_cols entries, values = act_type
-  activity_map    = NULL,    # named character vector: names = time_cols entries, values = display label
+  location_cols   = NULL,    # subset of time_cols; become act_type "location_move"
+  act_type_map    = NULL,    # named chr: time_cols entry -> act_type
+  activity_map    = NULL,    # named chr: time_cols entry -> display label
   drop_na         = TRUE,
+  tz              = "UTC",   # forwarded to coerce_datetime_column()
   time_col_out     = "timestamp",
   act_type_col_out = "act_type",
   activity_col_out = "activity"
@@ -272,573 +398,453 @@ pivot_events_longer(
 
 **Behaviour spec:**
 
-1. Validate `case_col` and every entry of `time_cols` exist in `data`; if not,
-   `cli::cli_abort()` listing missing names and the columns actually present
-   (mirror the exact message style already used in `validate.R`'s missing-column
-   check).
-2. If `location_cols` supplied, validate it's a subset of `time_cols` — abort
-   with the offending names otherwise.
-3. Coerce every column in `time_cols` to `POSIXct` using the new
-   `coerce_datetime_column()` helper (one call per column, reusing the same
-   error message format, naming which wide column and which row failed).
-4. `tidyr::pivot_longer(data, cols = dplyr::all_of(time_cols), names_to = ".milestone", values_to = time_col_out)`.
-   All columns not in `time_cols` (including `case_col`, `patient_col`, and any
-   other metadata columns like diagnosis/ward) are kept automatically as id
-   columns — this is default `pivot_longer` behaviour, don't hand-roll it.
-5. If `drop_na = TRUE`, drop rows where `.data[[time_col_out]]` is `NA`, and
-   `cli::cli_inform()` a per-milestone count of how many rows were dropped
-   (a milestone being NA for a case means "didn't happen for this case" —
-   this is expected, not an error).
-6. Compute `act_type_col_out`:
-   - if `.milestone %in% location_cols` → `"location_move"`
-   - else if `.milestone` has an entry in `act_type_map` → that value
-   - else → the raw `.milestone` string itself (fallback, always defined,
-     never NA)
-7. Compute `activity_col_out`:
-   - if `.milestone` has an entry in `activity_map` → that value
-   - else → prettified `.milestone` (replace `_`/`.` with a space, then
-     `tools::toTitleCase()`)
-8. Drop the internal `.milestone` column from the output. Return a tibble
-   with columns in this order: `case_col`, `patient_col` (if given),
-   `time_col_out`, `act_type_col_out`, `activity_col_out`, then any remaining
-   passthrough columns.
-9. The returned tibble must be directly usable as the `data` argument to
-   `plot_patient_journey()` with matching `time_col`/`act_type_col`/
-   `activity_col`/`case_col`/`patient_col` arguments — no further reshaping.
+1. Validate `case_col` and every `time_cols` entry exist; abort listing
+   missing + present names (mirror `validate.R`'s message style).
+2. `location_cols` must be a subset of `time_cols`; abort naming offenders.
+3. Coerce every `time_cols` column via `coerce_datetime_column(…, tz = tz)`.
+4. `tidyr::pivot_longer(cols = all_of(time_cols), names_to = ".milestone",
+   values_to = time_col_out)` — non-pivoted columns (case, patient, metadata
+   like diagnosis) pass through automatically; don't hand-roll.
+5. `drop_na = TRUE`: drop NA-timestamp rows with a per-milestone
+   `cli_inform` count (an NA milestone means "didn't happen for this case" —
+   expected, not an error).
+6. `act_type_col_out`: `location_cols` member → `"location_move"`; else
+   `act_type_map` entry; else the raw `.milestone` string (never NA).
+7. `activity_col_out`: `activity_map` entry if present; else prettified
+   `.milestone` — **first strip common timestamp suffixes**
+   (`_time`, `_at`, `_date`, `_ts`, `_datetime`, case-insensitive, end-anchored
+   regex), then replace `_`/`.` with spaces, then `tools::toTitleCase()`.
+   `"arrival_time"` → `"Arrival"`, not `"Arrival Time"`.
+8. Drop `.milestone`; column order: case, patient (if given), time, act_type,
+   activity, then passthrough columns.
+9. Output must feed `plot_patient_journey()` directly with matching col args.
 
-**Tests (`tests/testthat/test-pivot.R`):**
-- Fixture: a wide tibble, 3 cases, columns `case_id`, `patient_id`,
-  `arrival_time`, `triage_time`, `ward_time`, `discharge_time`, plus one
-  non-time metadata column (`diagnosis`).
-- Basic pivot with `location_cols = c("arrival_time","ward_time","discharge_time")`
-  and `act_type_map = c(triage_time = "triage")`: assert row count
-  (3 cases × 4 milestones, minus any NA), assert `act_type` values are
-  `"location_move"` for the three location columns and `"triage"` for
-  `triage_time`.
-- Missing `case_col` → `expect_error(..., regexp = "case_col")` style, mirroring
-  `validate.R`'s message shape.
-- `location_cols` not a subset of `time_cols` → aborts naming the offending
-  column.
-- A row with `NA` in one milestone column for one case → dropped, and
-  `expect_message(..., regexp = "dropped")` (or whatever wording is used —
-  keep it consistent).
-- End-to-end integration: pivot the fixture, then call
-  `plot_patient_journey(pivoted, case_id = "<id>", location_categories = "location_move", time_col = "timestamp", act_type_col = "act_type", activity_col = "activity", case_col = "case_id", patient_col = "patient_id")`
-  and `expect_s3_class(result, "ggplot")` — proves the two functions actually
-  compose, not just that each works in isolation.
-- `metadata` passthrough column (`diagnosis`) still present and correct in
-  output.
+**Tests (`test-pivot.R`):**
+- Fixture: 3 cases, cols `case_id`, `patient_id`, `arrival_time`,
+  `triage_time`, `ward_time`, `discharge_time`, `diagnosis`.
+- Basic pivot: row count, act_type values, suffix-stripped labels
+  (`"Arrival"` not `"Arrival Time"`).
+- Missing `case_col` aborts; `location_cols ⊄ time_cols` aborts naming the
+  column; NA milestone dropped with message.
+- **Equal-timestamp milestones for one case** (arrival == triage): pivots
+  cleanly AND the end-to-end plot call renders under the universal gate —
+  this exercises the Stage 0.5 stagger fix from the pivot side.
+- End-to-end: pivot → `plot_patient_journey(...)` →
+  `expect_s3_class(p, "ggplot")` + `expect_no_warning(ggplot_build(p))`.
+- `diagnosis` passthrough intact.
 
 **Definition of done**
-- [ ] `pivot_events_longer()` implemented exactly to spec above
-- [ ] `coerce_datetime_column()` extracted, `test-validate.R` still passes
-      unchanged
-- [ ] `test-pivot.R` passing, including the end-to-end integration test
-- [ ] Add `tidyr` to `DESCRIPTION` `Imports`
+- [ ] Implemented to spec; `tidyr` added to Imports
+- [ ] `coerce_datetime_column()` extracted; validate/fixes suites unchanged
+- [ ] End-to-end + equal-timestamp tests passing
 
 ---
 
 ## Stage 3 — Schema object + column/category auto-detection
 
 **Depends on:** Stage 0
-**Model tag:** 🟡 FRONTIER-DESIGN-THEN-LOCAL — the precedence rule and
-candidate-name lists are specified below, so implementation is 🟢 once read
-carefully; a frontier pass should just confirm the precedence order doesn't
-silently break Stage 0/1/2 behaviour before merging.
+**Model tag:** 🟡 FRONTIER-DESIGN-THEN-LOCAL — resolution rules now fully
+specified; frontier confirms precedence doesn't break earlier stages, then
+implementation is 🟢.
 
 **Files:** new `R/schema.R`, new `tests/testthat/test-schema.R`, edit
 `R/plot_patient_journey.R`.
 
-**`event_log_schema()` constructor:**
+**`event_log_schema()` constructor:** as revision 1 —
+`time_col/act_type_col/activity_col/case_col/patient_col/location_categories`,
+returns classed list, `print()` method.
 
-```r
-event_log_schema(
-  time_col = NULL, act_type_col = NULL, activity_col = NULL,
-  case_col = NULL, patient_col = NULL,
-  location_categories = NULL
-) 
-# returns list(...) with class "event_log_schema"
-```
-
-Add a `print.event_log_schema()` S3 method printing each field on its own line.
-
-**`autodetect_schema(data, location_categories = NULL)`:**
-
-For each role, try in order:
-1. Exact case-insensitive match of a column name against the candidate list
-   below.
-2. If no exact match, use `adist()` (already used for `suggest_matches()` in
-   `utils.R` — reuse that function, don't reimplement) between column names
-   and the candidate list, accept if distance ≤ 2.
-3. If still nothing, that field stays `NULL` in the returned schema and its
-   name is collected into a `missing` vector.
+**`autodetect_schema(data, location_categories = NULL)` — CORRECTED SPEC:**
 
 Candidate lists (case-insensitive):
-- `time_col`: `c("timestamp","time","ts","datetime","date_time","event_time","event_time_stamp")`
-- `act_type_col`: `c("act_type","event_type","category","type","event_category")`
-- `activity_col`: `c("activity","label","description","event","event_name","name")`
-- `case_col`: `c("case_id","caseid","case","spell_id","episode_id","id","encounter_id")`
-- `patient_col`: `c("patient_id","patient","k_number","mrn","person_id")`
+- `time_col`: `timestamp, time, ts, datetime, date_time, event_time, event_time_stamp`
+- `case_col`: `case_id, caseid, case, spell_id, episode_id, encounter_id, complaint_id, ticket_id`
+  — **`id` removed**: it matches any surrogate/row key and is more likely
+  wrong than right.
+- `act_type_col`: `act_type, event_type, category, type, event_category`
+- `activity_col`: `activity, label, description, event_name, name`
+  — bare `event` removed (fuzzy distance ≤ 2 from `event_type` made one
+  column claimable by two roles).
+- `patient_col`: `patient_id, patient, k_number, mrn, person_id`
 
-If any of `time_col`/`act_type_col`/`activity_col`/`case_col` remain
-undetected, `cli::cli_abort()` naming which roles couldn't be inferred, the
-column names that *were* tried, and instructing the user to pass an explicit
-`event_log_schema()`. (`patient_col` is optional — don't abort if only that
-one is missing.)
+Resolution algorithm (replaces revision 1's per-role independent matching):
+1. Roles are resolved **in fixed order** time → case → act_type → activity →
+   patient. Each data column may be claimed by at most one role; once
+   claimed it is removed from later roles' consideration.
+2. Per role: exact case-insensitive match first; else `adist() ≤ 2` fuzzy
+   match (reuse `suggest_matches()`).
+3. If two unclaimed columns tie for one role (equal distance), **abort**
+   naming both and asking for an explicit `event_log_schema()` — never
+   pick silently.
+4. Required roles (all but patient) unresolved → abort naming them, the
+   columns tried, and the `event_log_schema()` escape hatch.
+5. On success, `cli_inform` one line per field, stating exact vs fuzzy.
 
-On success, `cli::cli_inform()` one line per detected field: e.g.
-`"Detected time column: 'ts' (fuzzy match)"` vs `"(exact match)"` — this
-transparency matters more than saving a line of output.
+**Wiring into `plot_patient_journey()`:** `schema = NULL` param. Precedence
+per field, highest wins: explicit individual argument → schema field →
+current hardcoded default. Autodetect ONLY on the explicit sentinel
+`schema = "auto"` — never silently.
 
-**Wiring into `plot_patient_journey()`:**
-
-Add `schema = NULL` param. Precedence, highest wins:
-1. Explicit individual arguments (`time_col = "foo"`, etc.) — if a caller
-   passes both `schema` and an individual column argument, the individual
-   argument wins for that field only (not all-or-nothing).
-2. Fields present in `schema` (if `schema` supplied and a given field isn't
-   overridden by (1)).
-3. If neither (1) nor (2) supplies a required field, and `schema` was not
-   supplied at all, fall back to the current hardcoded defaults
-   (`time_col = "timestamp"`, etc.) — this exact fallback is what makes Stage
-   3 100% backward compatible with every existing call site and test.
-4. Only call `autodetect_schema()` if the caller explicitly asks for it via a
-   new `schema = "auto"` sentinel value (a string, not an `event_log_schema`
-   object) — auto-detection must never fire silently on a normal call; it's
-   opt-in.
-
-**Tests (`tests/testthat/test-schema.R`):**
-- `event_log_schema()` construction + print method.
-- `autodetect_schema()` on a renamed copy of `example_journey`
-  (`timestamp`→`ts`, `act_type`→`category`, `activity`→`label`,
-  `caseID`→`case_id`, `K_Number`→`mrn`) recovers the correct mapping via fuzzy
-  match, with `cli::cli_inform()` messages captured via `expect_message()`.
-- Undetectable schema (all columns renamed to nonsense like `col1`, `col2`)
-  aborts naming the missing roles.
-- `plot_patient_journey(data, schema = event_log_schema(time_col = "ts"), act_type_col = "category")`
-  — explicit `act_type_col` wins over anything schema would have set for that
-  field; `time_col` comes from schema.
-- Existing `test-validate.R`/`test-transform.R` calls (no `schema` argument at
-  all) still pass unchanged — this is the regression check that matters most
-  for this stage.
+**Tests:** construction/print; fuzzy recovery on a renamed `example_journey`;
+tie → abort; nonsense columns → abort naming roles; per-field precedence
+(explicit `act_type_col` beats schema, `time_col` comes from schema);
+claimed-column exclusivity (a column matching both time and activity lists is
+consumed by time only); all earlier suites pass untouched with no `schema`
+argument.
 
 **Definition of done**
-- [ ] Precedence rule implemented exactly as specified (explicit arg > schema
-      field > hardcoded default; autodetect only on explicit `"auto"`)
-- [ ] All prior tests (Stages 0–2) still pass unmodified
+- [ ] Ordered, exclusive, tie-aborting resolution implemented as specified
+- [ ] All prior tests pass unmodified
 - [ ] `test-schema.R` passing
 
 ---
 
 ## Stage 4 — Swimlanes (concurrent event tracks within one case)
 
-**Depends on:** Stage 3 (uses schema for the new `lane_col` field cleanly, though not strictly required)
-**Model tag:** 🔴 FRONTIER-REQUIRED for the core y-band generalisation and the
-conditional axis-visibility logic; 🟢 LOCAL-OK for wiring new params through
-`plot_patient_journey.R` once `transform.R`/`render.R` changes land.
-
-**Why this is the highest-risk stage:** it changes the meaning of the y-axis
-(currently always blank/meaningless) conditionally, and it must not alter
-`render_journey_plot()`'s output at all when lanes aren't used — the existing
-Stage 1 layer-count tests must keep passing.
+**Depends on:** Stages 1.5, 3
+**Model tag:** 🔴 FRONTIER-REQUIRED for the y-band generalisation and
+conditional axis visibility; 🟢 LOCAL-OK for parameter plumbing afterward.
 
 **Files:** `R/transform.R`, `R/render.R`, `R/plot_patient_journey.R`, new
 `tests/testthat/test-transform-lanes.R`.
 
-**Design:**
-- Location boxes remain the "spine": always occupy `y ∈ [0, box_height]`,
-  unaffected by lanes.
-- New param `lane_col = NULL` on `plot_patient_journey()` — the name of a
-  column in `data` whose distinct values define separate horizontal tracks
-  for **point events only** (never for location boxes).
-- When `lane_col` is `NULL` (default): identical behaviour to today — all
-  events at `y = box_height / 2`. This must be verified with a regression
-  test, not assumed.
-- When `lane_col` is supplied:
-  - Determine lane order: if the column is a factor, use its level order;
-    otherwise use first-appearance order in the sorted spell (mirrors the
-    existing `loc_levels <- unique(boxes$location)` idiom already in
-    `render.R` — copy that pattern, don't invent a new one).
-  - Each lane gets a vertical slot **above** the location spine:
-    lane *i* (1-indexed) occupies
-    `y ∈ [box_height + i * lane_gap + (i-1) * lane_height, box_height + i * lane_gap + i * lane_height]`,
-    with new params `lane_height` (default = `box_height`) and `lane_gap`
-    (default = `0.05`).
-  - `derive_point_events()` gains a `lane_col = NULL` param; when set, after
-    computing `box_id` as today, also compute each event's lane index from
-    the ordering above and set `y` accordingly (instead of the constant
-    `box_height / 2`).
-- **Axis visibility:** in `render_journey_plot()`, only make `axis.text.y`
-  visible (showing lane names) when lanes are active; keep it blank in the
-  default path. Implementation: pass a `lanes_active` boolean through `opts`
-  computed in `plot_patient_journey()` as `!is.null(lane_col)`, and branch the
-  existing `ggplot2::theme()` block on it — do not restructure the whole
-  theme block, just make the two `axis.text.y`/`axis.ticks.y` lines
-  conditional.
-- Document as a known limitation (in roxygen `@details`, not code): many
-  distinct `lane_col` values produce a very tall plot; no automatic capping is
-  implemented.
+**Design (consumes layout budget row 5):**
+- Location boxes stay the spine at `[0, box_height]`; lanes affect **point
+  events only**.
+- `lane_col = NULL` (default) → behaviour byte-identical to Stage 1.5
+  baselines (vdiffr proves it, not eyeballs).
+- When supplied: lane order = factor levels if factor, else first-appearance
+  order. Lane *i* (1-indexed) occupies
+  `[base + i*lane_gap + (i-1)*lane_height, base + i*lane_gap + i*lane_height]`
+  where **`base = box_height * 1.3`** (the budget's swimlane floor — NOT
+  directly atop the band, which duration/reference labels own).
+  New params `lane_height = box_height`, `lane_gap = 0.05 * box_height`.
+- `derive_point_events()` gains `lane_col`; computes lane index → `y`.
+- Axis: `axis.text.y` shows lane names only when lanes active; blank
+  otherwise. Branch the two theme lines on a `lanes_active` flag in `opts` —
+  do not restructure the theme block.
+- Duration labels (1a) and reference labels (1b) sit below the lane floor by
+  construction; the combined-features vdiffr snapshot must be re-approved
+  with lanes on (new snapshot 8, frontier-reviewed).
+- Document (roxygen `@details`): many lanes → tall plot; no auto-capping.
 
-**Tests (`tests/testthat/test-transform-lanes.R`):**
-- Synthetic log with a `domain` column (`"obs"`, `"meds"`, `"labs"`) and 2
-  events per domain. Assert 3 distinct `y` values in the output, each
-  spanning the expected `[lane_gap/height]` arithmetic given known
-  `box_height`/`lane_height`/`lane_gap` inputs.
-- `lane_col = NULL` produces byte-identical `y` values to pre-Stage-4 behaviour
-  (regression test against a fixture captured from the Stage-1 test suite).
-- `render_journey_plot()`: `axis.text.y` is a blank element when no lanes are
-  used, and a non-blank element (default/inherited) when lanes are active —
-  assert via inspecting the built theme object, e.g.
-  `inherits(p$theme$axis.text.y, "element_blank")`.
+**Tests:** hand-computed lane y arithmetic for 3 lanes; `lane_col = NULL`
+vdiffr baseline unchanged; axis element blank/non-blank via
+`p$theme$axis.text.y` inheritance; universal render gate with lanes +
+duration labels + reference lines simultaneously.
 
 **Definition of done**
-- [ ] `lane_col = NULL` path is byte-identical to pre-Stage-4 output (explicit
-      regression test, not just "looks the same")
-  - [ ] Lane y-position arithmetic verified with a hand-computed fixture
-- [ ] Axis label visibility toggles correctly and only when lanes are active
+- [ ] Null path proven identical via existing vdiffr baselines
+- [ ] Lane arithmetic fixture-verified; combined snapshot 8 approved
+- [ ] Axis visibility toggles only with lanes
 
 ---
 
 ## Stage 5 — Cohort view via faceting
 
-**Depends on:** Stage 4 (shares the per-case derive/loop pattern; not
-strictly blocked by it, but should land after so lanes + facets can be tested
-together)
-**Model tag:** 🟡 FRONTIER-DESIGN-THEN-LOCAL — the facet/scale/align-start
-decisions are made below; implementation from that spec is 🟢.
+**Depends on:** Stage 4
+**Model tag:** 🟡 FRONTIER-DESIGN-THEN-LOCAL — with one 🔴 exception: the
+renderer x-scale refactor below is the kind of change that must be
+frontier-reviewed against the vdiffr baselines.
 
-**Files:** new `R/cohort.R`, new `tests/testthat/test-cohort.R`.
+**Files:** new `R/cohort.R`, edit `R/render.R`, new
+`tests/testthat/test-cohort.R`.
 
-**New function (not an overload of `plot_patient_journey`):**
+**Prerequisite refactor (revision 1 omitted this and a local model would have
+hit a wall):** `render_journey_plot()` hardcodes `scale_x_datetime`, but
+`align_start = TRUE` needs a numeric elapsed-hours axis. Refactor FIRST:
+
+- Split `render_journey_plot()` internally into `journey_layers(boxes,
+  events, opts)` (geoms only) + x-scale/y-scale/theme assembly.
+- `opts$x_scale` ∈ `{"datetime", "elapsed_hours"}` (default `"datetime"`).
+  `"elapsed_hours"` emits `scale_x_continuous(labels = \(x) paste0("+", x, "h"))`
+  and skips `choose_date_breaks()`.
+- Gate: all vdiffr baselines unchanged after the refactor. Only then build
+  the cohort function.
+
+**`plot_journey_cohort()`** as revision 1 (`case_ids = NULL` → all;
+per-case `validate_event_log()` + `build_journey_tables()` reuse — never
+duplicate; bind with a `case_id` column; `facet_wrap(~case_id,
+scales = "free_x", ncol = ncol)` for absolute time;
+`align_start = TRUE` rebases each case to its first move and uses
+`x_scale = "elapsed_hours"` with `scales = "fixed"` — aligned cases exist to
+be compared on one axis). Plus, inherited from later thinking:
+`terminal_activities`, `tz`, `patient_col = NULL` all forwarded; a
+`max_cases = 25` guard aborting with advice to pass explicit `case_ids`
+(faceting hundreds of spells is a hang, not a plot).
+
+**Tests:** 3-case fixture; panel counts for NULL/subset `case_ids`;
+`align_start` → every case's first box at 0; **cross-facet colour
+consistency asserted via `ggplot_build()` fill values** (same location, same
+hex, every panel); `max_cases` guard; universal render gate both modes.
+
+**Definition of done**
+- [ ] x-scale refactor landed with baselines unchanged FIRST
+- [ ] Cohort function reuses internals, both modes tested, colour
+      consistency proven
+
+---
+
+## Stage 5b — Linear stage processes (no locations at all)
+
+**Depends on:** Stage 5
+**Model tag:** 🟡 FRONTIER-DESIGN-THEN-LOCAL — the staircase encoding below
+should be frontier-confirmed on the complaint dataset once, then it's 🟢.
+
+**Purpose.** Many event logs have no spatial component: a complaint moves
+acknowledgement → triage → assignment → review → senior review → formal
+letter; a purchase order moves raised → approved → fulfilled. Stage 0.5
+already proved the *band* layout handles this today (stage transitions as
+`location_categories`, `patient_col = NULL`, `terminal_activities` for the
+closing letter — see the rendered complaint demo from the review). This
+stage makes that first-class rather than incidental.
+
+**Files:** new `R/stage_ladder.R`, `data-raw/complaint_example.R`, `R/data.R`
+addition, edits to `R/plot_patient_journey.R` (one param), new
+`tests/testthat/test-stage-ladder.R`.
+
+### 5b-1. `complaint_example` dataset
+
+~8 complaints, one `complaint_id` each, stages
+`Acknowledgement → Triage → Assigned → Under review → Senior review →
+Formal letter sent` as `act_type = "stage_change"`, sprinkled point events
+(`contact`, `escalation`, `evidence_received`), varying dwell times
+including one complaint that stalls 3 weeks in "Under review" and one still
+open (never reaches the letter — exercises Stage 1c). No patient column —
+this dataset deliberately exercises `patient_col = NULL`.
+
+### 5b-2. Legend/vocabulary fit
+
+`plot_patient_journey()` gains `state_label = "Location"` — the fill legend
+title (a complaint's stages are not "Locations"). Single string param,
+threaded through `opts` to `scale_fill_manual(name = state_label)`. Default
+unchanged.
+
+### 5b-3. `plot_stage_ladder()` — the staircase view
+
+The band layout answers "what happened when"; for strictly linear processes
+the more compelling question is "**where does the time go**", which wants
+stage on the y-axis:
 
 ```r
-plot_journey_cohort(
-  data,
-  case_ids            = NULL,   # NULL = every distinct case in data
-  location_categories  = c("location_move", "ed_location_move"),
-  time_col = "timestamp", act_type_col = "act_type", activity_col = "activity",
-  case_col = "caseID", patient_col = "K_Number",
-  align_start          = FALSE, # TRUE = rebase each case to "hours since first location move"
-  ncol                 = NULL,  # passed to facet_wrap
-  ...                          # forwarded to derive_location_boxes/derive_point_events
+plot_stage_ladder(
+  data, case_id,
+  stage_categories,               # act_types that mark stage entry
+  stage_order   = NULL,           # explicit stage ordering; NULL = first appearance
+  time_col/act_type_col/activity_col/case_col as elsewhere,
+  patient_col   = NULL,
+  tz            = "UTC",
+  terminal_activities = NULL,
+  stage_targets = NULL,           # named numeric: stage -> target dwell hours
+  show_duration = TRUE
 )
 ```
 
-**Behaviour:**
-1. Resolve `case_ids`: if `NULL`, `unique(data[[case_col]])`.
-2. For each case id, run `validate_event_log()` + `build_journey_tables()`
-   exactly as `plot_patient_journey()` does today (call the same internal
-   functions — do not duplicate logic), tag the resulting `boxes`/`events`
-   tibbles with a `case_id` column, and `dplyr::bind_rows()` everything.
-3. If `align_start = TRUE`: for each case, subtract that case's own
-   `min(boxes$xmin)` from every `xmin`/`xmax` in its boxes and every `x` in
-   its events, then express the result as a numeric "hours since start" axis
-   instead of `POSIXct` (needed since `scale_x_datetime` can't represent a
-   relative duration meaningfully) — use `scale_x_continuous` with a
-   `"+Nh"`-style label formatter in this mode instead of
-   `choose_date_breaks()`/`choose_date_labels()`.
-4. If `align_start = FALSE` (default): keep real timestamps, use
-   `ggplot2::facet_wrap(~ case_id, scales = "free_x", ncol = ncol)` — `free_x`
-   is required since unrelated cases have unrelated absolute start times;
-   don't default to a shared x-axis.
-5. Colour scales: rely on the fact that `facet_wrap()` on one combined data
-   frame naturally produces one shared discrete scale across all panels — do
-   **not** build a separate colour scale per facet. Confirm this explicitly in
-   a test rather than assuming it.
+- Derivation: reuse `derive_location_boxes()` verbatim (stages ARE boxes);
+  the difference is purely rendering.
+- Render: y = stage (factor, `stage_order` or first-appearance, first stage
+  at the TOP so the case walks down-right like a Gantt); one horizontal
+  segment per stage from `xmin` to `xmax` (`linewidth ≈ 4`,
+  colour = stage fill); thin grey vertical connectors between consecutive
+  stage ends/starts, producing the staircase; duration text at each
+  segment's midpoint (reuses `format_duration()`, `"+"` suffix for
+  `end_inferred`); terminal stage drawn as a point marker, not a segment.
+- `stage_targets`: per-stage allowance rendered as a light band from stage
+  entry to entry+target on that stage's row; dwell beyond it draws the
+  excess in `firebrick`. This is the per-stage breach made visual — Stage 6b
+  computes the same thing numerically.
+- Cohort variant deferred: `plot_stage_ladder()` is single-case in this
+  stage; overlaying many cases (spaghetti) is Stage 6/v2 territory — noted
+  in Out of scope.
 
-**Tests (`tests/testthat/test-cohort.R`):**
-- 3-case synthetic fixture (reuse the `standard_log()`-style pattern from
-  `test-transform.R`, tripled with different `caseID`s and different start
-  times/durations).
-- `plot_journey_cohort(data)` with no `case_ids` → 3 facet panels.
-- `plot_journey_cohort(data, case_ids = c("A","B"))` → 2 panels only.
-- `align_start = TRUE`: assert every case's earliest box `xmin` is `0` after
-  transformation.
-- Colour consistency: same `location` value maps to the same hex colour
-  across all 3 cases — extract via `ggplot2::ggplot_build(p)$data` and compare
-  fill values for matching `location` labels across facets.
+**Tests:** ladder returns ggplot under the universal gate; stage y-order
+respects `stage_order` and errors on unknown stage names; duration labels
+present; `stage_targets` adds exactly one band layer per targeted stage;
+terminal stage renders as point; end-to-end on `complaint_example` for BOTH
+`plot_patient_journey()` (band) and `plot_stage_ladder()` (staircase); the
+still-open complaint shows the 1c ongoing treatment.
 
 **Definition of done**
-- [ ] `plot_journey_cohort()` implemented, reusing (not duplicating)
-      `validate_event_log()`/`build_journey_tables()`
-- [ ] Both `align_start` modes tested
-- [ ] Colour-consistency-across-facets explicitly tested, not assumed
+- [ ] `complaint_example` ships and is exercised end-to-end in both layouts
+- [ ] `state_label` param threaded; default output unchanged
+- [ ] Staircase encoding frontier-approved once on the complaint data;
+      vdiffr snapshot added
 
 ---
 
 ## Stage 6 — Cohort aggregate / statistical views
 
-**Depends on:** Stage 5 (reuses its per-case loop)
-**Model tag:** 🔴 FRONTIER-REQUIRED for 6c (visual encoding of the transition
-diagram — get this wrong and it's actively misleading); 🟢 LOCAL-OK for
-6a/6b/6d/6e once the shapes below are followed exactly.
+**Depends on:** Stage 5b
+**Model tag:** 🔴 FRONTIER-REQUIRED for 6c; 🟢 LOCAL-OK for the rest.
 
 **Files:** new `R/aggregate.R`, new `tests/testthat/test-aggregate.R`.
 
-### 6a. Per-case and cross-case duration summaries
+**Global rule for every function in this stage:** duration statistics MUST
+respect `end_inferred`. Default `include_inferred = FALSE` drops imputed
+final-stay durations from means/medians/quantiles and reports
+`n_inferred_excluded`; `TRUE` includes them but the output carries the flag
+column so callers can see what they ingested. Revision 1 omitted this and
+would have shipped LOS statistics silently contaminated by the tail-
+imputation rendering convenience.
 
+### 6a. Duration summaries
+`summarise_journey_durations()` (one row per stay: case_id, location, xmin,
+xmax, duration_secs, end_inferred, terminal) and
+`summarise_stage_durations()` (per location: n_cases, mean/median/p25/p75
+secs, n_inferred_excluded) built on it.
+
+### 6b. Breach rates — per-stage, not whole-spell
 ```r
-summarise_journey_durations(data, case_ids = NULL, ...) 
-# -> tibble: case_id, location, xmin, xmax, duration_secs   (one row per stay)
-
-summarise_stage_durations(data, case_ids = NULL, ...)
-# -> tibble: location, n_cases, mean_secs, median_secs, p25_secs, p75_secs
+summarise_breach_rate(data, target_hours, scope = "spell", case_ids = NULL, ...)
 ```
-
-`summarise_stage_durations()` is built by calling
-`summarise_journey_durations()` then `dplyr::group_by(location) |> dplyr::summarise(...)`.
-
-### 6b. Breach-rate summary
-
-```r
-summarise_breach_rate(data, case_ids = NULL, target_hours, ...)
-# -> tibble: case_id, elapsed_hours, breached (logical)
-# elapsed_hours = (last event timestamp - first location-move timestamp) in hours,
-# for that case. Document this definition explicitly in roxygen @details —
-# it is a deliberate choice (admission-to-last-known-event), not "total row span".
-```
+- `scope = "spell"`: first location move → last event (revision 1's
+  definition, retained as one option).
+- `scope = "<location name>"`: dwell within that stage — this is how real
+  targets work (ED 4-hour standard = time in the ED box; complaint
+  acknowledgement SLA = time in "Acknowledgement"). Returns case_id,
+  elapsed_hours, breached, end_inferred. Unknown location name → abort with
+  `suggest_matches()` hint.
 
 ### 6c. Transition summary / flow diagram
+As revision 1 (`summarise_transitions()` from per-case lag/lead pairs;
+`plot_transition_summary()` hand-rolled with `geom_segment`, linewidth ∝ n,
+mean dwell at segment midpoints) with the frontier review REQUIRED on a
+synthetic cohort whose cases visit stages in different orders and counts —
+the exact case where a mechanical implementation produces a legible-looking
+lie. Dwell means obey the `include_inferred` rule.
 
-```r
-summarise_transitions(data, case_ids = NULL, ...)
-# -> tibble: from_location, to_location, n, mean_dwell_secs (dwell time in from_location)
+### 6d. `return_data` summary element
+`return_data = TRUE` also returns `summary = summarise_journey_durations()`
+for the one case → `list(plot, boxes, events, summary)`. Additive.
 
-plot_transition_summary(data, case_ids = NULL, ...)
-# -> ggplot: x = sequence step (1, 2, 3, ...), y = location (factor, ordered by
-#    first appearance across the cohort), geom_segment connecting step i to
-#    step i+1 with linewidth scaled to `n` (num cases making that transition),
-#    geom_label at each node showing location name + n cases currently there,
-#    geom_text at each segment midpoint showing mean dwell time.
-```
-`summarise_transitions()`: for each case, take its `boxes` (from Stage 5's
-per-case loop), compute `dplyr::lag(location)`/`dplyr::lead(location)` pairs
-within the case, then aggregate counts and mean dwell time across all cases
-with `dplyr::count()`/`dplyr::summarise()`. **Frontier review point:** verify
-the resulting diagram is legible and not misleading on a real (not
-single-path) cohort where cases visit locations in different orders — this
-is exactly the failure mode a mechanical implementation is most likely to
-produce without noticing.
+### 6e. (Stretch) `plot_journey_with_summary()`
+patchwork-stacked timeline + per-stage duration bars; `requireNamespace`
+guard with install hint, same idiom as the RColorBrewer check.
 
-### 6d. Summary table in `plot_patient_journey()`'s `return_data`
-
-- Extend the existing `return_data = TRUE` path in `plot_patient_journey()`
-  (`R/plot_patient_journey.R`) to also include
-  `summary = summarise_journey_durations(data filtered to this one case_id)`,
-  so `return_data = TRUE` yields `list(plot, boxes, events, summary)`. Purely
-  additive — existing consumers pulling `$plot`/`$boxes`/`$events` are
-  unaffected.
-
-### 6e. (Optional/stretch) Combined stats + timeline panel
-
-- Add `Suggests: patchwork`. New function
-  `plot_journey_with_summary(...)` (forwards args to `plot_patient_journey()`)
-  that stacks the timeline plot above a small `ggplot2::geom_col()` chart of
-  per-location duration, joined with `patchwork::plot_layout(ncol = 1, heights = c(3, 1))`.
-  Guard with `requireNamespace("patchwork", quietly = TRUE)`, `cli::cli_abort()`
-  with an install hint if missing — same idiom as the existing
-  `RColorBrewer` optional-dependency check in `utils.R`.
-
-**Tests (`tests/testthat/test-aggregate.R`):**
-- 3-case fixture with hand-computed expected means/medians for
-  `summarise_stage_durations()`.
-- `summarise_breach_rate()` with a known `target_hours` — assert the boolean
-  breach flag matches hand-calculated elapsed times.
-- `summarise_transitions()` on a fixture with a known, small set of
-  transitions — assert exact `n`/`mean_dwell_secs` values.
-- `return_data = TRUE` includes a `summary` element with the right columns.
+**Tests:** hand-computed fixtures for 6a/6b (both scopes) including
+inferred-end exclusion counts; exact transition n/dwell values for 6c;
+`return_data` shape for 6d.
 
 **Definition of done**
-- [ ] 6a/6b/6d implemented and unit-tested against hand-computed fixtures
-- [ ] 6c implemented, and reviewed (not just tested) on a synthetic
-      non-trivial cohort (cases visiting locations in different orders/counts)
-- [ ] 6e implemented behind the optional-dependency guard, if attempted
+- [ ] All stats respect `end_inferred` with tested exclusion counts
+- [ ] Per-stage breach scope tested against hand-calculated dwell
+- [ ] 6c frontier-reviewed on a non-trivial multi-path cohort
 
 ---
 
 ## Stage 7 — Interactive renderer
 
-**Depends on:** Stage 1 (opts shape must be stable), Stage 4 (lanes should be
-representable in the interactive path too)
-**Model tag:** 🟢 LOCAL-OK (library choice and pattern already fixed above)
+**Depends on:** Stages 1.5, 4
+**Model tag:** 🟢 LOCAL-OK
 
-**Files:** new `R/render_interactive.R`, edit `R/plot_patient_journey.R`,
-new `tests/testthat/test-render-interactive.R`.
-
-**Steps:**
-1. Add `ggiraph` to `Suggests`.
-2. `render_journey_plot_interactive(boxes, events, opts)` — a near-mirror of
-   `render_journey_plot()`:
-   - `ggplot2::geom_rect()` → `ggiraph::geom_rect_interactive()`, adding
-     `tooltip = paste0(location, "<br>", format_duration(as.numeric(duration, units = "secs")))`,
-     `data_id = box_id`.
-   - `ggplot2::geom_point()` → `ggiraph::geom_point_interactive()`, adding
-     `tooltip = activity`, `data_id = dplyr::row_number()`.
-   - Everything else (scales, theme) identical — factor the shared
-     scale/theme-building code out of `render_journey_plot()` into a small
-     internal helper both renderers call, rather than copy-pasting the whole
-     function. (This is a light refactor of Stage-1-era `render.R`; keep the
-     public `render_journey_plot()` behaviour byte-identical.)
-   - Wrap final plot: `ggiraph::girafe(ggobj = p, options = list(ggiraph::opts_hover(css = "fill:#333;"), ggiraph::opts_sizing(rescale = TRUE)))`.
-3. Add `interactive = FALSE` param to `plot_patient_journey()`. When `TRUE`:
-   - `if (!requireNamespace("ggiraph", quietly = TRUE)) cli::cli_abort(c("The {.pkg ggiraph} package is required for interactive = TRUE.", "i" = "Install it with {.code install.packages('ggiraph')}"))` — mirror the existing `RColorBrewer` guard pattern in `utils.R`.
-   - Dispatch to `render_journey_plot_interactive()` instead of
-     `render_journey_plot()`. Document clearly in roxygen that the return
-     type changes from `ggplot` to a `girafe`/htmlwidget object when
-     `interactive = TRUE`.
-
-**Tests:**
-- `testthat::skip_if_not_installed("ggiraph")` guard at the top of
-  `test-render-interactive.R`.
-- `plot_patient_journey(example_journey, case_id = "SP-001", interactive = TRUE)`
-  returns a non-NULL object of class including `"girafe"`.
-- Missing-package path: temporarily can't easily unit-test `requireNamespace`
-  returning FALSE without mocking — acceptable to skip this specific branch
-  from automated tests and note it as manually verified.
+As revision 1 (`ggiraph`; `render_journey_plot_interactive()` mirroring the
+static renderer via the shared `journey_layers()` helper that Stage 5's
+refactor already created — do NOT re-factor again here;
+`interactive = FALSE` param; `requireNamespace` guard; roxygen documents the
+changed return type), with these amendments:
+- Box tooltips: location, true `format_duration(duration)`, entry/exit
+  times, and `"(end inferred)"` when flagged — tooltips must not overclaim
+  imputed ends any more than labels may.
+- Terminal markers and swimlane points get tooltips too
+  (`geom_segment_interactive` / `geom_point_interactive`).
+- Static output regression: vdiffr baselines unchanged (the girafe path must
+  not perturb the shared layer code).
 
 **Definition of done**
-- [ ] Shared scale/theme code factored out without changing
-      `render_journey_plot()`'s output (regression-tested)
-- [ ] `interactive = TRUE` produces a working `girafe` widget on the example
-      dataset (manually opened once and inspected — tooltips must actually
-      show sensible text, not just "no error thrown")
+- [ ] `interactive = TRUE` returns a girafe widget; opened and tooltip text
+      manually verified once
+- [ ] All vdiffr baselines still pass
 
 ---
 
 ## Stage 8 — Generalisation polish
 
-**Depends on:** Stage 5 (cohort view is worth demonstrating on the new
-dataset too)
-**Model tag:** 🟢 LOCAL-OK, except picking the non-clinical example domain
-(🟡 FRONTIER-DESIGN — recommendation given below, confirm and proceed)
+**Depends on:** Stage 5b
+**Model tag:** 🟢 LOCAL-OK
 
-**Files:** `data-raw/support_ticket_example.R`, `R/data.R` (add
-documentation block), `R/theme.R` (new, extracted from `render.R`), roxygen
-edits across `R/*.R` for terminology.
+**Files:** `data-raw/support_ticket_example.R`, `R/data.R`, `R/theme.R`,
+roxygen edits.
 
-**Steps:**
-1. **Second example dataset.** Recommendation: a support-ticket lifecycle
-   log — `case_id` = ticket id, locations =
-   `"Open" → "Assigned" → "In Progress" → "Waiting on Customer" → "Resolved" → "Closed"`,
-   events = `"comment_added"`, `"priority_changed"`, `"reassigned"`,
-   `"sla_warning"`. Build it the same way `example_journey` was built
-   (`tibble::tribble()`), save via `usethis::use_data(support_ticket_example)`,
-   document in `R/data.R`.
-2. **Extract `theme_journey()`.** Move the `ggplot2::theme(...)` block
-   currently inline in `render_journey_plot()` into an exported function
-   `theme_journey(base_size = 11)` in a new `R/theme.R`. `render_journey_plot()`
-   and `render_journey_plot_interactive()` both call
-   `theme_journey(base_size = 11)` instead of inlining it. Purely a
-   refactor — output must be byte-identical (test with `ggplot_build()`
-   comparison before/after).
-3. **Terminology pass (documentation only, not code):** in roxygen `@param`
-   text for `location_categories`, `location_palette`, etc., describe the
-   concept generically ("the categorical attribute defining boxes on the
-   timeline — e.g. physical location, but equally an order status, ticket
-   state, or pipeline stage") rather than hospital-specific language.
-   **Do not rename the parameters themselves** — that would break every
-   earlier stage's tests and the public API for no functional gain.
-
-**Tests:**
-- `plot_patient_journey(support_ticket_example, case_id = "<some id>", location_categories = "location_move", ...)` runs end-to-end without error and returns a `ggplot` — this is the test that actually proves genericity, not just a claim in the README.
-- `plot_journey_cohort(support_ticket_example)` likewise runs end-to-end.
-- `theme_journey()` extraction regression test: `ggplot_build()` output
-  identical before/after the refactor on a fixed example.
+1. **Third dataset, non-healthcare-adjacent:** support-ticket lifecycle
+   (Open → Assigned → In Progress → Waiting on Customer → Resolved →
+   Closed; events comment_added/priority_changed/reassigned/sla_warning).
+   The complaint data (5b) is still NHS-adjacent; tickets prove the package
+   leaves the sector entirely. Exercised end-to-end through
+   `plot_patient_journey()` (with `state_label = "Status"`),
+   `plot_stage_ladder()`, and `plot_journey_cohort()`.
+2. **Extract `theme_journey(base_size = 11)`** into `R/theme.R`, used by both
+   renderers. Byte-identical output — vdiffr baselines are the gate.
+3. **Terminology pass (docs only):** roxygen text describes "location"
+   generically (any exclusive state: ward, ticket status, complaint stage,
+   pipeline step). **Parameter names do not change** — renaming would break
+   every earlier stage for zero functional gain.
 
 **Definition of done**
-- [ ] Second, non-clinical dataset ships and is exercised by an end-to-end
-      test through both `plot_patient_journey()` and `plot_journey_cohort()`
-- [ ] `theme_journey()` exported and reused by both renderers
-- [ ] Roxygen docs describe concepts generically
+- [ ] Ticket dataset end-to-end through all three plotting functions
+- [ ] `theme_journey()` extracted, baselines unchanged
+- [ ] Docs de-hospitalised
 
 ---
 
-## Stage 9 — Test hardening / visual regression
+## Stage 9 — Test gap-closing & internal cleanup
 
-**Depends on:** everything above (this is the closing-the-gaps pass)
-**Model tag:** 🔴 FRONTIER-REQUIRED to generate and *look at* the initial
-`vdiffr` baseline images before committing them (a baseline nobody has looked
-at is worthless); 🟢 LOCAL-OK to write the surrounding integration tests once
-the visual cases are chosen.
+**Depends on:** everything above
+**Model tag:** 🟢 LOCAL-OK (the visual-baseline work that made revision 1's
+version of this stage 🔴 moved to Stage 1.5)
 
-**Files:** new `tests/testthat/test-render-snapshots.R`,
-new `tests/testthat/test-plot-patient-journey.R` (closes the pre-existing gap
-— this top-level orchestrator has never had direct tests).
-
-**Steps:**
-1. Add `vdiffr` to `Suggests`. Create `vdiffr::expect_doppelganger()` snapshots
-   for these specific cases on `example_journey`, each named descriptively:
-   - default plot (no optional params)
-   - `show_labels = TRUE`
-   - `show_duration = TRUE`
-   - `label_boxes = TRUE`
-   - `lane_col` set (from Stage 4)
-   - `reference_lines` set (from Stage 1b)
-   A frontier pass must render each of these once locally
-   (`vdiffr::manage_cases()` or equivalent), visually confirm they look
-   correct, and only then commit the SVG baselines.
-2. Add direct tests for `plot_patient_journey()` itself (never tested at this
-   level before): `expect_s3_class(result, "ggplot")`; title
-   auto-generation format when `title = NULL`; `return_data = TRUE` shape
-   (`list` with `plot`/`boxes`/`events`/`summary` per Stage 6d);
-   `exclude_categories` actually drops the right rows (row-count assertion
-   before/after).
-3. Wire `covr`/Codecov into the CI workflow from Stage 0 (optional but cheap).
+1. Direct tests for `plot_patient_journey()` orchestration not covered by
+   `test-fixes.R`: auto-title format, `exclude_categories` row counts,
+   `return_data` shape incl. Stage 6d's `summary`.
+2. vdiffr snapshots for everything built after Stage 1.5 that lacks one
+   (lanes, cohort both modes, ladder, tickets) — frontier-approved like the
+   originals.
+3. **Replace the `attr(events, "pre_box")` handoff** with an explicit
+   `list(events, pre_box)` return from `derive_point_events()` — the
+   attribute survives only because dplyr happens to preserve unknown
+   attributes through `mutate()`. Update `build_journey_tables()` and the
+   two tests that read the attribute. Behaviour identical.
+4. `covr` + Codecov in CI; target ≥ 85% line coverage, no file below 70%.
 
 **Definition of done**
-- [ ] vdiffr baselines exist for all six cases above, each visually confirmed
-      once by a frontier pass
-- [ ] `plot_patient_journey()` has direct tests for its own orchestration
-      logic (title generation, `exclude_categories`, `return_data` shape) —
-      previously only its dependencies (`validate.R`/`transform.R`) were
-      tested
-- [ ] Full suite (`devtools::test()`) green, `devtools::check()` clean
+- [ ] Orchestrator directly tested; pre_box handoff explicit; coverage wired
 
 ---
 
 ## Stage 10 — Documentation & packaging polish
 
 **Depends on:** everything above
-**Model tag:** 🟢 LOCAL-OK — outline given below, purely mechanical to fill in
+**Model tag:** 🟢 LOCAL-OK
 
-**Files:** `README.Rmd` → `README.md`, `vignettes/*.Rmd`, `_pkgdown.yml`,
-`NEWS.md`, `.github/workflows/pkgdown.yaml`.
-
-**Steps:**
-1. `README.Rmd`: open with the generic framing ("visualise any timestamped
-   event log as a readable timeline"), a quick-start using
-   `example_journey`, then a section titled "Not just healthcare" rendering
-   `support_ticket_example`. Knit via `devtools::build_readme()`.
-2. Three vignettes:
-   - `vignettes/getting-started.Rmd` — the clinical walkthrough (today's
-     `example_data.R` header comment is already most of this content).
-   - `vignettes/adapting-your-data.Rmd` — covers `event_log_schema()`/
-     `autodetect_schema()` (Stage 3) and `pivot_events_longer()` (Stage 2)
-     together, since both exist to solve "my data doesn't look like the
-     example" — this is the single most important vignette for adoption.
-   - `vignettes/cohort-analysis.Rmd` — `plot_journey_cohort()` (Stage 5) and
-     the `summarise_*()`/`plot_transition_summary()` functions (Stage 6).
-3. `_pkgdown.yml` + `.github/workflows/pkgdown.yaml`
-   (`usethis::use_pkgdown_github_pages()` template).
-4. `NEWS.md`: one `## eventviz 0.1.0` entry summarising all stages as bullet
-   points — this doubles as a human-readable changelog of this entire plan.
+1. `README.Rmd` → generic framing first ("visualise any timestamped event
+   log"), quick-start on `example_journey`, then "Not just healthcare"
+   showing `complaint_example` (staircase) and `support_ticket_example`
+   (band + cohort).
+2. Four vignettes:
+   - `getting-started.Rmd` — clinical walkthrough
+   - `adapting-your-data.Rmd` — schema/autodetect (3) + pivot wrapper (2)
+     together: the single most important vignette for adoption
+   - `linear-processes.Rmd` — complaints/tickets, band vs staircase, when to
+     use which, `stage_targets`
+   - `cohort-analysis.Rmd` — cohort facets (5) + aggregates/transitions (6)
+3. `_pkgdown.yml` + pkgdown GitHub Pages workflow; `NEWS.md` 0.1.0 entry
+   including the two sanctioned default-output changes (0.5 fixes, 1f
+   palette).
 
 **Definition of done**
-- [ ] README renders cleanly and shows both example datasets
-- [ ] All three vignettes build without error (`devtools::build_vignettes()`)
-- [ ] pkgdown site builds locally (`pkgdown::build_site()`) without error
-- [ ] `NEWS.md` present
+- [ ] README + four vignettes build; pkgdown builds; NEWS.md present
 
 ---
 
-## Explicitly out of scope for this plan
+## Explicitly out of scope (deferred, not silently folded in)
 
-Raised during review as ideas but deliberately deferred — add as new stages
-later if wanted, not silently folded in here:
-- Full alluvial/Sankey diagrams via `ggalluvial`/`networkD3` (v2 of Stage 6c
-  if the hand-rolled version proves insufficient)
-- Shiny app / interactive dashboard wrapper
-- Hierarchical/nested location support (e.g. Ward > Bay > Bed)
-- A Python or JS port / htmlwidget beyond the `ggiraph` interactive mode
-- CRAN submission (Stage 0–10 gets the package to CRAN-shaped, not
-  CRAN-submitted)
+- **Segmented / non-linear time axis and per-location zoom facets** — the
+  review's biggest open visualisation idea (long stays compress clinically
+  dense periods into slivers). Real design work; a future stage of its own.
+- Cohort staircase overlay ("spaghetti" of many cases on one ladder).
+- Full alluvial/Sankey via `ggalluvial` (v2 of 6c if the hand-rolled version
+  proves insufficient).
+- Shiny dashboard wrapper; hierarchical locations (Ward > Bay > Bed);
+  Python/JS ports; CRAN submission (plan gets the package CRAN-shaped, not
+  CRAN-submitted).
+- Multi-band single-panel stacking via `assign_y_bands(band_index > 0)` —
+  superseded by facets (Stage 5); the helper stays but nothing drives it.

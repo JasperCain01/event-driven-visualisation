@@ -30,16 +30,26 @@ render_journey_plot <- function(boxes, events, opts) {
   # Midline y for event points
   midline_y <- box_height / 2
 
+  # Number of events, needed early: label logic influences the y-scale
+  n_events <- nrow(events)
+
+  # Split terminal markers (zero-duration end states, e.g. "Discharged") from
+  # true stays — terminals render as a vertical marker, never as a box.
+  term_boxes <- dplyr::filter(boxes, terminal)
+  boxes      <- dplyr::filter(boxes, !terminal)
+
   # Shrink each box's rendered xmax by a fixed number of seconds so all gaps
   # are the same absolute width on screen. The gap is expressed as a proportion
   # of the TOTAL journey span (not each box's own width), ensuring consistency
   # regardless of how long individual stays are.
   # Guard with pmax so a very short box can never render with negative width.
+  # xmin_render (not xmin) is the base: it staggers boxes whose predecessor
+  # was nudged over them after a shared timestamp.
   gap_secs <- total_span_secs * box_gap_prop
   boxes <- dplyr::mutate(
     boxes,
-    xmax_render = xmin + pmax(
-      as.numeric(xmax - xmin, units = "secs") - gap_secs,
+    xmax_render = xmin_render + pmax(
+      as.numeric(xmax - xmin_render, units = "secs") - gap_secs,
       gap_secs   # minimum render width = one gap unit
     )
   )
@@ -64,7 +74,7 @@ render_journey_plot <- function(boxes, events, opts) {
     ggplot2::geom_rect(
       data = boxes,
       ggplot2::aes(
-        xmin  = xmin,
+        xmin  = xmin_render,
         xmax  = xmax_render,
         ymin  = ymin,
         ymax  = ymax,
@@ -74,6 +84,28 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 2: terminal state markers ──────────────────────────────────────
+  # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
+  # bar at its timestamp with a direct label, outside the fill legend.
+  if (nrow(term_boxes) > 0) {
+    p <- p +
+      ggplot2::geom_segment(
+        data = term_boxes,
+        ggplot2::aes(x = xmin, xend = xmin, y = ymin, yend = ymax),
+        colour    = "grey25",
+        linewidth = 1.1
+      ) +
+      ggplot2::geom_text(
+        data = term_boxes,
+        ggplot2::aes(x = xmin, y = ymax, label = location),
+        hjust    = 1.1,
+        vjust    = -0.6,
+        size     = 3,
+        fontface = "italic",
+        colour   = "grey25"
+      )
+  }
 
   # ── Layer 3: instantaneous event points ──────────────────────────────────
   if (nrow(events) > 0) {
@@ -92,31 +124,36 @@ render_journey_plot <- function(boxes, events, opts) {
   }
 
   # ── Layer 4: optional event labels via ggrepel ────────────────────────────
-  n_events <- nrow(events)
+  labels_will_render <- show_labels && n_events > 0 && n_events <= label_max
 
-  if (show_labels && n_events > 0) {
-    if (n_events > label_max) {
-      cli::cli_inform(c(
-        "!" = "{n_events} events exceed {.arg label_max} ({label_max}); labels suppressed.",
-        "i" = "Increase {.arg label_max} or use {.arg exclude_categories} to reduce event count."
-      ))
-    } else {
-      p <- p +
-        ggrepel::geom_text_repel(
-          data = dplyr::mutate(events, y = midline_y),
-          ggplot2::aes(x = x, y = y, label = activity),
-          size          = 2.8,
-          direction     = "y",
-          nudge_y       = -0.18,
-          segment.size  = 0.3,
-          segment.color = "grey50",
-          max.overlaps  = 20,
-          colour        = "grey20"
-        )
-    }
+  if (show_labels && n_events > label_max) {
+    cli::cli_inform(c(
+      "!" = "{n_events} events exceed {.arg label_max} ({label_max}); labels suppressed.",
+      "i" = "Increase {.arg label_max} or use {.arg exclude_categories} to reduce event count."
+    ))
+  }
+
+  if (labels_will_render) {
+    p <- p +
+      ggrepel::geom_text_repel(
+        data = dplyr::mutate(events, y = midline_y),
+        ggplot2::aes(x = x, y = y, label = activity),
+        size          = 2.8,
+        direction     = "y",
+        nudge_y       = -box_height * 0.7,
+        segment.size  = 0.3,
+        segment.color = "grey50",
+        max.overlaps  = Inf,   # the user asked for labels; show them all
+        colour        = "grey20"
+      )
   }
 
   # ── Scales ────────────────────────────────────────────────────────────────
+  # No hard y limits: with limits = c(0, box_height), labels nudged below the
+  # band were censored to NA and silently dropped — every label vanished.
+  # Instead, expand the lower range only when labels are actually rendered.
+  y_expand_lower <- if (labels_will_render) 1.2 else 0.05
+
   p <- p +
     ggplot2::scale_x_datetime(
       date_breaks = date_breaks,
@@ -124,8 +161,7 @@ render_journey_plot <- function(boxes, events, opts) {
       expand      = ggplot2::expansion(mult = 0.02)
     ) +
     ggplot2::scale_y_continuous(
-      limits = c(0, box_height),
-      expand = ggplot2::expansion(mult = c(0.05, 0.15))
+      expand = ggplot2::expansion(mult = c(y_expand_lower, 0.15))
     ) +
     ggplot2::scale_fill_manual(
       values = loc_colours,
@@ -165,9 +201,12 @@ render_journey_plot <- function(boxes, events, opts) {
       panel.grid.minor.y = ggplot2::element_blank(),
       panel.grid.minor.x = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_line(colour = "grey88", linewidth = 0.4),
-      # Legends
+      # Legends — stacked vertically: two side-by-side legends overflow the
+      # plot width at realistic category counts, clipping titles and entries
       legend.position  = "bottom",
-      legend.box       = "horizontal",
+      legend.box       = "vertical",
+      legend.margin    = ggplot2::margin(t = 2, b = 0),
+      legend.box.margin = ggplot2::margin(0, 0, 0, 0),
       legend.title     = ggplot2::element_text(size = 9, face = "bold"),
       legend.text      = ggplot2::element_text(size = 8),
       # Title

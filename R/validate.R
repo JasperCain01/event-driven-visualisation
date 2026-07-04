@@ -5,13 +5,24 @@
 # single-spell, time-sorted tibble on success, or calls cli::cli_abort() with
 # an actionable message on failure.
 
-validate_event_log <- function(data, cols, case_id, location_categories) {
+validate_event_log <- function(data, cols, case_id, location_categories,
+                               tz = "UTC") {
 
   # ── 1. data must be a data frame / tibble ──────────────────────────────────
   if (!is.data.frame(data)) {
     cli::cli_abort(c(
       "{.arg data} must be a data frame or tibble.",
       "x" = "You supplied an object of class {.cls {class(data)}}."
+    ))
+  }
+
+  # ── 1b. case_id must be a single non-missing value ────────────────────────
+  # A vector case_id would crash the bare `if` in check 3 with an obscure
+  # "condition has length > 1" error; abort cleanly instead.
+  if (length(case_id) != 1L || is.na(case_id)) {
+    cli::cli_abort(c(
+      "{.arg case_id} must be a single non-missing value.",
+      "i" = "To visualise several cases, call the function once per case."
     ))
   }
 
@@ -51,19 +62,26 @@ validate_event_log <- function(data, cols, case_id, location_categories) {
   }
 
   # ── 5. Multiple patients under one caseID is suspicious ───────────────────
-  n_patients <- dplyr::n_distinct(spell[[cols$patient]])
-  if (n_patients > 1) {
-    cli::cli_warn(c(
-      "!" = "Case {.val {case_id}} maps to {n_patients} distinct values of {.field {cols$patient}}.",
-      "i" = "Expected one patient per spell. Proceeding with all rows."
-    ))
+  # cols$patient may be NULL — patient/entity ID is optional for event logs
+  # that have no second identifier (e.g. non-clinical processes).
+  if (!is.null(cols$patient)) {
+    n_patients <- dplyr::n_distinct(spell[[cols$patient]])
+    if (n_patients > 1) {
+      cli::cli_warn(c(
+        "!" = "Case {.val {case_id}} maps to {n_patients} distinct values of {.field {cols$patient}}.",
+        "i" = "Expected one patient per spell. Proceeding with all rows."
+      ))
+    }
   }
 
   # ── 6. Coerce timestamp to POSIXct ────────────────────────────────────────
+  # tz applies only when parsing character/numeric input; lubridate otherwise
+  # defaults silently to UTC, which shifts wall-clock exports (e.g. BST) by
+  # an hour. Existing POSIXct columns keep their own tzone untouched.
   ts_raw <- spell[[cols$time]]
 
   if (!inherits(ts_raw, "POSIXct")) {
-    ts_coerced <- suppressWarnings(lubridate::as_datetime(ts_raw))
+    ts_coerced <- suppressWarnings(lubridate::as_datetime(ts_raw, tz = tz))
     na_new     <- which(is.na(ts_coerced) & !is.na(ts_raw))
 
     if (length(na_new) > 0) {

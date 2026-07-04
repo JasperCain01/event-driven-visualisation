@@ -14,6 +14,10 @@
 infer_box_end <- function(last_xmin, all_timestamps, preceding_durations,
                           strategy = "last_event") {
 
+  # Validate up front — an unrecognised strategy would otherwise fall through
+  # every branch and return NULL, producing an obscure downstream error.
+  strategy <- match.arg(strategy, c("last_event", "median", "fixed"))
+
   if (strategy == "last_event") {
     last_ts <- max(all_timestamps, na.rm = TRUE)
     if (last_ts > last_xmin) {
