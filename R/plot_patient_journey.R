@@ -52,6 +52,11 @@ plot_patient_journey <- function(
     location_palette = NULL,
     event_palette    = NULL,
 
+    # Auto-palette style used when location_palette/event_palette are NULL.
+    # "okabe" (default): colourblind-safe Okabe-Ito based palette. "brewer":
+    # the original Set2/Dark2 palette, for callers pinning old colours.
+    palette_style = c("okabe", "brewer"),
+
     # Visual geometry
     box_height    = 0.25,
     # Proportion of each box's width trimmed from its right edge to create a
@@ -132,6 +137,7 @@ plot_patient_journey <- function(
     label_max        = label_max,
     location_palette = location_palette,
     event_palette    = event_palette,
+    palette_style    = palette_style,
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
     title            = title

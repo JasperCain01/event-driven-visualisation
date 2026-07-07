@@ -88,17 +88,50 @@ suggest_matches <- function(not_found, available, max_dist = 3) {
 
 # ── Default colour palette ─────────────────────────────────────────────────────
 
+# The 8-hue Okabe-Ito colourblind-safe qualitative palette.
+.okabe_ito <- c(
+  "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+  "#0072B2", "#D55E00", "#CC79A7", "#000000"
+)
+
 # Generate a named colour vector for a set of levels, using a qualitative
 # palette. Returns a named character vector level → hex colour.
-# Trade-off: viridis would be perceptually uniform but is sequential; a
-# qualitative palette (Set2/Set3) better distinguishes categoricals like
-# location names.
-journey_palette <- function(levels, type = c("location", "event")) {
-  type  <- match.arg(type)
-  n     <- length(levels)
+#
+# palette_style:
+#   "okabe"  (default) — colourblind-safe. Locations get the Okabe-Ito hues
+#     lightened 40% toward white (so text/points overlaid on a box stay
+#     legible); events get the same 8 hues *offset by 4 positions* so a
+#     location and event sharing an index never share a hue (event 1 gets
+#     colour 5, wrapping). Recycles past 8 distinct values.
+#   "brewer" — the original Set2 (location) / Dark2 (event) palette, kept
+#     verbatim for callers pinning the pre-1f default output.
+journey_palette <- function(levels, type = c("location", "event"),
+                            palette_style = c("okabe", "brewer")) {
+  type          <- match.arg(type)
+  palette_style <- match.arg(palette_style)
+  n             <- length(levels)
 
   if (n == 0) return(character(0))
 
+  if (palette_style == "okabe") {
+    offset <- if (type == "event") 4L else 0L
+    idx    <- ((seq_len(n) - 1L + offset) %% length(.okabe_ito)) + 1L
+    cols   <- .okabe_ito[idx]
+
+    if (type == "location") {
+      cols <- if (requireNamespace("colorspace", quietly = TRUE)) {
+        colorspace::lighten(cols, amount = 0.4)
+      } else {
+        vapply(cols, function(col) {
+          grDevices::colorRampPalette(c(col, "white"))(5)[3]
+        }, character(1), USE.NAMES = FALSE)
+      }
+    }
+
+    return(stats::setNames(cols, levels))
+  }
+
+  # palette_style == "brewer" — original behaviour, kept verbatim.
   # Use RColorBrewer if available (likely in any ggplot2 install context),
   # otherwise fall back to hcl.colors which is base R since 4.0
   palette_name <- if (type == "location") "Set2" else "Dark2"

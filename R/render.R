@@ -16,6 +16,7 @@ render_journey_plot <- function(boxes, events, opts) {
   label_max        <- opts$label_max
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
+  palette_style    <- opts$palette_style
   box_height       <- opts$box_height
   box_gap_prop     <- opts$box_gap_prop
   plot_title       <- opts$title
@@ -59,8 +60,10 @@ render_journey_plot <- function(boxes, events, opts) {
   evt_levels <- if (nrow(events) > 0) unique(events$act_type) else character(0)
 
   # Use caller-supplied palettes if provided, otherwise auto-generate
-  loc_colours <- location_palette %||% journey_palette(loc_levels, "location")
-  evt_colours <- event_palette    %||% journey_palette(evt_levels, "event")
+  loc_colours <- location_palette %||%
+    journey_palette(loc_levels, "location", palette_style)
+  evt_colours <- event_palette %||%
+    journey_palette(evt_levels, "event", palette_style)
 
   # ── Base plot ──────────────────────────────────────────────────────────────
   # No global aes — each layer owns its data and mapping to keep layers
