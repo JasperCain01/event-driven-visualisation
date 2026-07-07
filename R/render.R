@@ -14,6 +14,7 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  label_boxes      <- opts$label_boxes
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
@@ -84,6 +85,27 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 1e: direct box labelling ────────────────────────────────────────
+  # Nudged slightly off the event midline (box_height/2) so labels don't sit
+  # directly under event points. check_overlap = TRUE silently drops
+  # colliding labels rather than pulling in a new dependency for collision
+  # avoidance — acceptable here because, unlike show_labels' event labels,
+  # missing a box label is a minor readability loss, not a broken feature.
+  if (label_boxes && nrow(boxes) > 0) {
+    box_labels <- dplyr::mutate(
+      boxes,
+      x_mid = xmin_render + (xmax_render - xmin_render) / 2
+    )
+
+    p <- p +
+      ggplot2::geom_text(
+        data = box_labels,
+        ggplot2::aes(x = x_mid, y = box_height / 2 + 0.06, label = location),
+        size          = 2.6,
+        check_overlap = TRUE
+      )
+  }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
