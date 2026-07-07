@@ -65,6 +65,13 @@ derive_location_boxes <- function(data, cols, location_categories,
   is_terminal <- !is.null(terminal_activities) &&
     move_events$location[n_boxes] %in% terminal_activities
 
+  # Converse of is_terminal: the caller told us what "done" looks like
+  # (terminal_activities), but this case's last recorded move isn't one of
+  # them — the data feed stopped before the spell reached a terminal state.
+  # terminal_activities = NULL means the caller made no such claim, so there
+  # is nothing to be "open" relative to: attribute stays FALSE, no visual change.
+  spell_open <- !is.null(terminal_activities) && !is_terminal
+
   if (is_terminal) {
     move_events$xmax[n_boxes] <- move_events$xmin[n_boxes]
   } else {
@@ -120,6 +127,10 @@ derive_location_boxes <- function(data, cols, location_categories,
 
   # Apply y-band geometry (single spell → band_index = 0)
   move_events <- assign_y_bands(move_events, box_height = box_height)
+
+  # Set after assign_y_bands (a dplyr::mutate() call) so the attribute isn't
+  # attached before a transformation that could plausibly drop it.
+  attr(move_events, "spell_open") <- spell_open
 
   move_events
 }
@@ -236,6 +247,10 @@ build_journey_tables <- function(data, cols, location_categories,
     terminal_activities = terminal_activities
   )
 
+  # Read off spell_open before bind_rows()/arrange() below, which build a new
+  # tibble and would otherwise drop it.
+  spell_open <- attr(boxes, "spell_open") %||% FALSE
+
   # Derive instantaneous events, passing boxes so interval join can run
   events <- derive_point_events(data, boxes, cols, location_categories,
                                 box_height = box_height)
@@ -247,6 +262,7 @@ build_journey_tables <- function(data, cols, location_categories,
     boxes <- dplyr::bind_rows(pre_box, boxes) |>
       dplyr::arrange(xmin)
   }
+  attr(boxes, "spell_open") <- spell_open
 
   list(boxes = boxes, events = events)
 }

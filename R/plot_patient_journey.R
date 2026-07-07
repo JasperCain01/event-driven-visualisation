@@ -134,7 +134,8 @@ plot_patient_journey <- function(
     event_palette    = event_palette,
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
-    title            = title
+    title            = title,
+    spell_open       = attr(boxes, "spell_open") %||% FALSE
   )
 
   # ── Render ────────────────────────────────────────────────────────────────

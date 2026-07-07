@@ -14,6 +14,7 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  spell_open       <- opts$spell_open %||% FALSE
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
@@ -84,6 +85,35 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 1d: ongoing-spell indication ────────────────────────────────────
+  # Converse of the terminal-state marker: the case never reached a state
+  # named in terminal_activities — the data feed just stopped. Marks the
+  # final box's right edge as open-ended rather than implying its (inferred)
+  # xmax is a known, true end.
+  if (spell_open && nrow(boxes) > 0) {
+    final_box <- dplyr::slice_tail(boxes, n = 1)
+
+    p <- p +
+      ggplot2::geom_segment(
+        data = final_box,
+        ggplot2::aes(x = xmax, xend = xmax, y = ymin, yend = ymax),
+        colour    = "grey25",
+        linetype  = "dashed",
+        linewidth = 0.8
+      ) +
+      ggplot2::annotate(
+        "text",
+        x        = final_box$xmax,
+        y        = box_height * 1.04,
+        label    = "(ongoing)",
+        hjust    = 1,
+        vjust    = 0,
+        size     = 2.6,
+        fontface = "italic",
+        colour   = "grey25"
+      )
+  }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
