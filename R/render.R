@@ -263,7 +263,11 @@ render_journey_plot <- function(boxes, events, opts) {
         segment.size  = 0.3,
         segment.color = "grey50",
         max.overlaps  = Inf,   # the user asked for labels; show them all
-        colour        = "grey20"
+        colour        = "grey20",
+        # Fixed seed so label placement is reproducible run-to-run — ggrepel's
+        # repulsion is stochastic, which otherwise makes the plot (and its
+        # vdiffr baseline) non-deterministic.
+        seed          = 42
       )
   }
 
