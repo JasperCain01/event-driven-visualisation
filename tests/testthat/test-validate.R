@@ -156,3 +156,25 @@ test_that("returned tibble is sorted ascending by timestamp", {
   result <- validate_event_log(log, cols, "SP-001", loc_cats)
   expect_true(all(diff(as.numeric(result$timestamp)) >= 0))
 })
+
+
+# ── 10. Case column literally named "case_id" (data-mask collision) ─────────
+
+test_that("filtering works when the case column is itself named case_id", {
+  # dplyr::filter()'s data mask resolves a bare `case_id` against a data
+  # column of that name before the function argument; validate_event_log()
+  # must filter correctly regardless of what the case column is called.
+  log <- tibble::tibble(
+    case_id   = c("C1", "C1", "C2"),
+    timestamp = as.POSIXct(c("2024-01-01 08:00", "2024-01-01 09:00",
+                             "2024-01-01 08:00"), tz = "UTC"),
+    act_type  = c("location_move", "obs", "location_move"),
+    activity  = c("ED", "BP check", "ED")
+  )
+  cols2 <- list(time = "timestamp", act_type = "act_type",
+               activity = "activity", case = "case_id", patient = NULL)
+
+  result <- validate_event_log(log, cols2, "C1", loc_cats)
+  expect_equal(unique(result$case_id), "C1")
+  expect_equal(nrow(result), 2)
+})

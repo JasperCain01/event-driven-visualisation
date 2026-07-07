@@ -55,7 +55,12 @@ validate_event_log <- function(data, cols, case_id, location_categories,
   }
 
   # ── 4. Filter to the single spell ─────────────────────────────────────────
-  spell <- dplyr::filter(data, .data[[cols$case]] == case_id)
+  # .env$case_id (not bare case_id) — a data mask resolves unqualified names
+  # against columns before the calling environment, so if the case column
+  # happens to be named "case_id" (a very natural choice, and exactly what
+  # pivot_events_longer()'s docs use), a bare `case_id` here would silently
+  # compare the column to itself instead of to the argument.
+  spell <- dplyr::filter(data, .data[[cols$case]] == .env$case_id)
 
   if (nrow(spell) == 0) {
     cli::cli_abort("Filtering to case {.val {case_id}} produced an empty data frame.")
@@ -75,25 +80,7 @@ validate_event_log <- function(data, cols, case_id, location_categories,
   }
 
   # ── 6. Coerce timestamp to POSIXct ────────────────────────────────────────
-  # tz applies only when parsing character/numeric input; lubridate otherwise
-  # defaults silently to UTC, which shifts wall-clock exports (e.g. BST) by
-  # an hour. Existing POSIXct columns keep their own tzone untouched.
-  ts_raw <- spell[[cols$time]]
-
-  if (!inherits(ts_raw, "POSIXct")) {
-    ts_coerced <- suppressWarnings(lubridate::as_datetime(ts_raw, tz = tz))
-    na_new     <- which(is.na(ts_coerced) & !is.na(ts_raw))
-
-    if (length(na_new) > 0) {
-      cli::cli_abort(c(
-        "Could not parse {length(na_new)} value(s) in {.field {cols$time}} as datetime.",
-        "x" = "Problematic row(s): {.val {na_new}}",
-        "i" = "Example value: {.val {ts_raw[na_new[1]]}}"
-      ))
-    }
-
-    spell[[cols$time]] <- ts_coerced
-  }
+  spell[[cols$time]] <- coerce_datetime_column(spell[[cols$time]], cols$time, tz = tz)
 
   # Warn (not abort) if duplicate timestamps exist — stable sort handles them
   n_dupes <- sum(duplicated(spell[[cols$time]]))

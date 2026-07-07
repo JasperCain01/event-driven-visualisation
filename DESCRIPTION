@@ -3,6 +3,6 @@ Version: 0.1.0
 Title: Event Log Visualisation Package
 Description: A general-purpose package for visualising patient journey event logs.
 License: MIT + file LICENSE
-Imports: dplyr, tibble, ggplot2, ggrepel, cli, lubridate, rlang, stats, utils
-Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, tidyr, ggiraph, patchwork, vdiffr, knitr, rmarkdown
+Imports: dplyr, tibble, ggplot2, ggrepel, cli, lubridate, rlang, stats, utils, tidyr
+Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown
 Config/testthat/edition: 3

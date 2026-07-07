@@ -220,6 +220,32 @@ validate_reference_lines <- function(reference_lines) {
 }
 
 
+# ── Timestamp coercion ──────────────────────────────────────────────────────────
+
+# Coerce a column to POSIXct, aborting with an actionable message naming which
+# values failed to parse. POSIXct input is returned untouched (keeping its own
+# tzone); tz only applies when parsing character/numeric input, since
+# lubridate would otherwise default silently to UTC, shifting wall-clock
+# exports (e.g. BST) by an hour. col_label is used only in the error message
+# (typically the column name).
+coerce_datetime_column <- function(x, col_label, tz = "UTC") {
+  if (inherits(x, "POSIXct")) return(x)
+
+  coerced <- suppressWarnings(lubridate::as_datetime(x, tz = tz))
+  na_new  <- which(is.na(coerced) & !is.na(x))
+
+  if (length(na_new) > 0) {
+    cli::cli_abort(c(
+      "Could not parse {length(na_new)} value(s) in {.field {col_label}} as datetime.",
+      "x" = "Problematic row(s): {.val {na_new}}",
+      "i" = "Example value: {.val {x[na_new[1]]}}"
+    ))
+  }
+
+  coerced
+}
+
+
 # ── High-cardinality bucketing ─────────────────────────────────────────────────
 
 # Recode all but the `top_n` most frequent values of `x` to "Other", so a

@@ -1,5 +1,24 @@
 # eventviz (development version)
 
+## Stage 2 — Wide-to-long pivot wrapper
+
+* New `pivot_events_longer()` reshapes wide, one-row-per-case milestone data
+  (e.g. `arrival_time`, `triage_time`, `discharge_time` columns) into the
+  long, one-row-per-event form `plot_patient_journey()` expects. Handles
+  location vs. non-location milestones (`location_cols`), custom
+  `act_type_map`/`activity_map` overrides, NA-milestone dropping, and
+  suffix-stripped auto-labelling (`"arrival_time"` -> `"Arrival"`).
+* `tidyr` moved from Suggests to Imports (used by `pivot_events_longer()`).
+* Internal: timestamp coercion extracted from `validate_event_log()` into a
+  shared `coerce_datetime_column()` helper, reused by the new pivot function.
+* Fixed a pre-existing bug in `validate_event_log()`: filtering to a single
+  case used a bare `case_id` inside `dplyr::filter()`, which dplyr's data
+  mask would resolve against a data column named `case_id` instead of the
+  function argument whenever the case column happened to be named exactly
+  `case_id` (a natural, common choice — and the one used throughout the new
+  pivot wrapper's own examples). Fixed by forcing environment lookup
+  (`.env$case_id`). No change to previously-passing behaviour.
+
 ## Stage 1 — Visual quick wins
 
 New opt-in features on `plot_patient_journey()`, each defaulting to prior
