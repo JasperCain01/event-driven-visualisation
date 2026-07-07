@@ -1,5 +1,25 @@
 # eventviz (development version)
 
+## Stage 3 — Schema object + column autodetection
+
+* New `event_log_schema()` constructor: a classed list bundling
+  `time_col`/`act_type_col`/`activity_col`/`case_col`/`patient_col`/
+  `location_categories`, with a `print()` method. Every field defaults to
+  `NULL` ("not part of this schema").
+* New `autodetect_schema(data, location_categories = NULL)` matches column
+  names against per-role candidate lists (case-insensitive exact match
+  first, then `adist() <= 2` fuzzy match), resolving roles in a fixed order
+  (time -> case -> act_type -> activity -> patient) so a column claimed by
+  one role is never reconsidered for another. Two equally-good matches for
+  one role, or an unresolved required role, abort naming the problem rather
+  than guessing.
+* `plot_patient_journey()` gains a `schema` argument. Precedence per field,
+  highest wins: an explicit individual argument (`time_col`, `case_col`, …)
+  > the matching schema field > the function's existing hardcoded default.
+  Autodetection only ever runs when `schema = "auto"` is passed literally —
+  passing an `event_log_schema()` object never triggers it. Default
+  behaviour (no `schema` argument) is unchanged.
+
 ## Stage 2 — Wide-to-long pivot wrapper
 
 * New `pivot_events_longer()` reshapes wide, one-row-per-case milestone data

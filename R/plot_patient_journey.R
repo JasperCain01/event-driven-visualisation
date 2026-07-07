@@ -9,7 +9,7 @@
 #   6. Returns the ggplot object (or list when return_data = TRUE)
 #
 # Source all files in R/ to use:
-#   source("R/utils.R"); source("R/validate.R")
+#   source("R/utils.R"); source("R/validate.R"); source("R/schema.R")
 #   source("R/transform.R"); source("R/render.R")
 #   source("R/plot_patient_journey.R")
 
@@ -30,6 +30,14 @@ plot_patient_journey <- function(
     activity_col    = "activity",
     case_col        = "caseID",
     patient_col     = "K_Number",
+
+    # Schema object (event_log_schema()) bundling the column-mapping args
+    # above. NULL = ignored. The literal string "auto" triggers
+    # autodetect_schema(data, location_categories) — autodetection never runs
+    # silently for any other value. Per-field precedence, highest wins:
+    # an explicitly supplied individual argument (time_col, case_col, ...)
+    # > the matching schema field > this function's own hardcoded default.
+    schema = NULL,
 
     # Timezone used when parsing character timestamps (POSIXct input keeps
     # its own tzone). Wall-clock exports from UK systems should pass
@@ -89,6 +97,34 @@ plot_patient_journey <- function(
     # Set TRUE to return list(plot, boxes, events) for debugging or extension
     return_data = FALSE
 ) {
+
+  # ── Resolve schema, if any, before touching the column-mapping args ───────
+  # missing(x) reflects whether the *caller* supplied x, independent of x's
+  # bound default value — this is what lets an explicit argument beat the
+  # schema while an omitted argument still falls through to it.
+  if (identical(schema, "auto")) {
+    schema <- autodetect_schema(
+      data,
+      location_categories = if (missing(location_categories)) NULL else location_categories
+    )
+  }
+
+  if (!is.null(schema) && !inherits(schema, "event_log_schema")) {
+    cli::cli_abort(c(
+      "{.arg schema} must be an {.cls event_log_schema} object, the string
+       {.val auto}, or {.code NULL}.",
+      "x" = "You supplied an object of class {.cls {class(schema)}}."
+    ))
+  }
+
+  if (!is.null(schema)) {
+    if (missing(time_col)            && !is.null(schema$time_col))            time_col            <- schema$time_col
+    if (missing(case_col)            && !is.null(schema$case_col))            case_col            <- schema$case_col
+    if (missing(act_type_col)        && !is.null(schema$act_type_col))        act_type_col        <- schema$act_type_col
+    if (missing(activity_col)        && !is.null(schema$activity_col))        activity_col        <- schema$activity_col
+    if (missing(patient_col)         && !is.null(schema$patient_col))         patient_col         <- schema$patient_col
+    if (missing(location_categories) && !is.null(schema$location_categories)) location_categories <- schema$location_categories
+  }
 
   # ── Resolve column names into a single named list ─────────────────────────
   # All downstream functions use this list rather than the raw arg names, so
