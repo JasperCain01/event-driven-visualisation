@@ -117,3 +117,42 @@ journey_palette <- function(levels, type = c("location", "event")) {
 # ── Null-coalescing operator ───────────────────────────────────────────────────
 
 `%||%` <- function(x, y) if (!is.null(x)) x else y
+
+
+# ── reference_lines validation ─────────────────────────────────────────────────
+
+# Validate the shape of the `reference_lines` argument to plot_patient_journey():
+# NULL (no reference lines) or a data frame with a numeric `offset_hours`
+# column (hours from the spell's first event) and a `label` column.
+validate_reference_lines <- function(reference_lines) {
+  if (is.null(reference_lines)) return(invisible(NULL))
+
+  if (!is.data.frame(reference_lines)) {
+    cli::cli_abort(c(
+      "{.arg reference_lines} must be a data frame or {.code NULL}.",
+      "x" = "You supplied an object of class {.cls {class(reference_lines)}}."
+    ))
+  }
+
+  required <- c("offset_hours", "label")
+  missing  <- setdiff(required, names(reference_lines))
+  if (length(missing) > 0) {
+    cli::cli_abort(c(
+      "{.arg reference_lines} is missing required column(s): {.val {missing}}.",
+      "i" = "Expected columns: {.val {required}}."
+    ))
+  }
+
+  if (nrow(reference_lines) == 0) {
+    cli::cli_abort("{.arg reference_lines} must have at least one row.")
+  }
+
+  if (!is.numeric(reference_lines$offset_hours)) {
+    cli::cli_abort(c(
+      "{.field offset_hours} in {.arg reference_lines} must be numeric.",
+      "x" = "You supplied class {.cls {class(reference_lines$offset_hours)}}."
+    ))
+  }
+
+  invisible(NULL)
+}

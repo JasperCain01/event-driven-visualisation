@@ -14,6 +14,7 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  reference_lines  <- opts$reference_lines
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
@@ -24,6 +25,10 @@ render_journey_plot <- function(boxes, events, opts) {
   total_span_secs <- as.numeric(
     difftime(max(boxes$xmax), min(boxes$xmin), units = "secs")
   )
+  # Anchor for reference_lines' offset_hours: the spell's first event. When a
+  # synthetic pre-admission box exists it already carries the earliest event
+  # timestamp, so min(boxes$xmin) covers both cases.
+  first_event_time <- min(boxes$xmin)
   date_breaks <- choose_date_breaks(total_span_secs)
   date_labels <- choose_date_labels(total_span_secs)
 
@@ -84,6 +89,33 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 1c: reference / target-threshold lines ─────────────────────────
+  # Reserved y-range [1.12*box_height, 1.3*box_height] per the layout budget —
+  # sits above the duration-label row, never atop the boxes/events below it.
+  if (!is.null(reference_lines)) {
+    ref_lines <- dplyr::mutate(
+      reference_lines,
+      x = first_event_time + offset_hours * 3600
+    )
+
+    p <- p +
+      ggplot2::geom_vline(
+        data      = ref_lines,
+        ggplot2::aes(xintercept = x),
+        colour    = "firebrick",
+        linetype  = "dashed",
+        linewidth = 0.5
+      ) +
+      ggplot2::geom_text(
+        data = ref_lines,
+        ggplot2::aes(x = x, y = box_height * 1.14, label = label),
+        hjust  = -0.05,
+        vjust  = 0,
+        size   = 2.8,
+        colour = "firebrick"
+      )
+  }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical

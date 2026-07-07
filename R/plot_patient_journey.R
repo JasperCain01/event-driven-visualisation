@@ -48,6 +48,10 @@ plot_patient_journey <- function(
     show_labels = FALSE,
     label_max   = 30L,
 
+    # Reference / target-threshold lines. Data frame with `offset_hours`
+    # (numeric, hours from the spell's first event) and `label`, or NULL.
+    reference_lines = NULL,
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
@@ -82,6 +86,7 @@ plot_patient_journey <- function(
 
   # ── Validate inputs and get a cleaned single-spell tibble ─────────────────
   spell <- validate_event_log(data, cols, case_id, location_categories, tz = tz)
+  validate_reference_lines(reference_lines)
 
   # ── Drop excluded categories now that validation has passed ───────────────
   if (!is.null(exclude_categories)) {
@@ -130,6 +135,7 @@ plot_patient_journey <- function(
   opts <- list(
     show_labels      = show_labels,
     label_max        = label_max,
+    reference_lines  = reference_lines,
     location_palette = location_palette,
     event_palette    = event_palette,
     box_height       = box_height,
