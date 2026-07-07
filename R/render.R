@@ -14,6 +14,7 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  event_type_top_n <- opts$event_type_top_n
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
@@ -32,6 +33,13 @@ render_journey_plot <- function(boxes, events, opts) {
 
   # Number of events, needed early: label logic influences the y-scale
   n_events <- nrow(events)
+
+  # High-cardinality event-type bucketing — done before colour/shape scales
+  # (and the point/legend layers that use them) are built, so "Other" is
+  # what gets scaled and drawn, not the raw long tail.
+  if (!is.null(event_type_top_n) && n_events > 0) {
+    events$act_type <- bucket_top_n(events$act_type, event_type_top_n)
+  }
 
   # Split terminal markers (zero-duration end states, e.g. "Discharged") from
   # true stays — terminals render as a vertical marker, never as a box.

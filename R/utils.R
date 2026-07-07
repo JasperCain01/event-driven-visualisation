@@ -117,3 +117,30 @@ journey_palette <- function(levels, type = c("location", "event")) {
 # ── Null-coalescing operator ───────────────────────────────────────────────────
 
 `%||%` <- function(x, y) if (!is.null(x)) x else y
+
+
+# ── High-cardinality bucketing ─────────────────────────────────────────────────
+
+# Recode all but the `top_n` most frequent values of `x` to "Other", so a
+# high-cardinality event_type column doesn't blow out the colour/shape
+# legend. Ties at the keep/drop boundary are broken by first appearance, for
+# deterministic output. Returns `x` unchanged if it has top_n or fewer
+# distinct values.
+bucket_top_n <- function(x, top_n) {
+  freq <- table(x)
+  first_appearance <- match(names(freq), x)
+  ord <- order(-as.numeric(freq), first_appearance)
+  levels_ordered <- names(freq)[ord]
+
+  if (length(levels_ordered) <= top_n) return(x)
+
+  keep    <- levels_ordered[seq_len(top_n)]
+  dropped <- setdiff(levels_ordered, keep)
+
+  cli::cli_inform(c(
+    "i" = "{length(dropped)} event type(s) collapsed into {.val Other}
+           (kept top {top_n} by frequency): {.val {dropped}}."
+  ))
+
+  ifelse(x %in% keep, x, "Other")
+}

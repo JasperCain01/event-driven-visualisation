@@ -48,6 +48,11 @@ plot_patient_journey <- function(
     show_labels = FALSE,
     label_max   = 30L,
 
+    # When the distinct act_type count exceeds this, keep the top-N most
+    # frequent event types and recode the rest to "Other" before colour/shape
+    # scales are built. NULL = no bucketing.
+    event_type_top_n = NULL,
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
@@ -130,6 +135,7 @@ plot_patient_journey <- function(
   opts <- list(
     show_labels      = show_labels,
     label_max        = label_max,
+    event_type_top_n = event_type_top_n,
     location_palette = location_palette,
     event_palette    = event_palette,
     box_height       = box_height,
