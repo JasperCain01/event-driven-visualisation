@@ -48,9 +48,30 @@ plot_patient_journey <- function(
     show_labels = FALSE,
     label_max   = 30L,
 
+    # Show a formatted duration label above each non-terminal box
+    # (end_inferred boxes get a "+" suffix, since the end time is imputed)
+    show_duration = FALSE,
+
+    # Label each box directly with its location name, at box centre
+    label_boxes = FALSE,
+
+    # Reference / target-threshold lines. Data frame with `offset_hours`
+    # (numeric, hours from the spell's first event) and `label`, or NULL.
+    reference_lines = NULL,
+
+    # When the distinct act_type count exceeds this, keep the top-N most
+    # frequent event types and recode the rest to "Other" before colour/shape
+    # scales are built. NULL = no bucketing.
+    event_type_top_n = NULL,
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
+
+    # Auto-palette style used when location_palette/event_palette are NULL.
+    # "okabe" (default): colourblind-safe Okabe-Ito based palette. "brewer":
+    # the original Set2/Dark2 palette, for callers pinning old colours.
+    palette_style = c("okabe", "brewer"),
 
     # Visual geometry
     box_height    = 0.25,
@@ -82,6 +103,7 @@ plot_patient_journey <- function(
 
   # ── Validate inputs and get a cleaned single-spell tibble ─────────────────
   spell <- validate_event_log(data, cols, case_id, location_categories, tz = tz)
+  validate_reference_lines(reference_lines)
 
   # ── Drop excluded categories now that validation has passed ───────────────
   if (!is.null(exclude_categories)) {
@@ -130,11 +152,17 @@ plot_patient_journey <- function(
   opts <- list(
     show_labels      = show_labels,
     label_max        = label_max,
+    show_duration    = show_duration,
+    label_boxes      = label_boxes,
+    reference_lines  = reference_lines,
+    event_type_top_n = event_type_top_n,
     location_palette = location_palette,
     event_palette    = event_palette,
+    palette_style    = palette_style,
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
-    title            = title
+    title            = title,
+    spell_open       = attr(boxes, "spell_open") %||% FALSE
   )
 
   # ── Render ────────────────────────────────────────────────────────────────

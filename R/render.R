@@ -14,8 +14,14 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  show_duration    <- opts$show_duration
+  label_boxes      <- opts$label_boxes
+  reference_lines  <- opts$reference_lines
+  event_type_top_n <- opts$event_type_top_n
+  spell_open       <- opts$spell_open %||% FALSE
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
+  palette_style    <- opts$palette_style
   box_height       <- opts$box_height
   box_gap_prop     <- opts$box_gap_prop
   plot_title       <- opts$title
@@ -24,6 +30,10 @@ render_journey_plot <- function(boxes, events, opts) {
   total_span_secs <- as.numeric(
     difftime(max(boxes$xmax), min(boxes$xmin), units = "secs")
   )
+  # Anchor for reference_lines' offset_hours: the spell's first event. When a
+  # synthetic pre-admission box exists it already carries the earliest event
+  # timestamp, so min(boxes$xmin) covers both cases.
+  first_event_time <- min(boxes$xmin)
   date_breaks <- choose_date_breaks(total_span_secs)
   date_labels <- choose_date_labels(total_span_secs)
 
@@ -32,6 +42,13 @@ render_journey_plot <- function(boxes, events, opts) {
 
   # Number of events, needed early: label logic influences the y-scale
   n_events <- nrow(events)
+
+  # High-cardinality event-type bucketing — done before colour/shape scales
+  # (and the point/legend layers that use them) are built, so "Other" is
+  # what gets scaled and drawn, not the raw long tail.
+  if (!is.null(event_type_top_n) && n_events > 0) {
+    events$act_type <- bucket_top_n(events$act_type, event_type_top_n)
+  }
 
   # Split terminal markers (zero-duration end states, e.g. "Discharged") from
   # true stays — terminals render as a vertical marker, never as a box.
@@ -59,8 +76,10 @@ render_journey_plot <- function(boxes, events, opts) {
   evt_levels <- if (nrow(events) > 0) unique(events$act_type) else character(0)
 
   # Use caller-supplied palettes if provided, otherwise auto-generate
-  loc_colours <- location_palette %||% journey_palette(loc_levels, "location")
-  evt_colours <- event_palette    %||% journey_palette(evt_levels, "event")
+  loc_colours <- location_palette %||%
+    journey_palette(loc_levels, "location", palette_style)
+  evt_colours <- event_palette %||%
+    journey_palette(evt_levels, "event", palette_style)
 
   # ── Base plot ──────────────────────────────────────────────────────────────
   # No global aes — each layer owns its data and mapping to keep layers
@@ -84,6 +103,106 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 1a: duration labels ─────────────────────────────────────────────
+  # Reserved y-range [box_height, 1.12*box_height] per the layout budget —
+  # sits just above the band, never atop the boxes/events/labels below it.
+  # Only non-terminal boxes get a label; end_inferred boxes (the imputed
+  # final stay) are suffixed "+" so the label never overclaims a data-backed end.
+  if (show_duration && nrow(boxes) > 0) {
+    duration_labels <- dplyr::mutate(
+      boxes,
+      x_mid     = xmin_render + (xmax_render - xmin_render) / 2,
+      dur_label = format_duration(as.numeric(duration, units = "secs")),
+      dur_label = ifelse(end_inferred, paste0(dur_label, "+"), dur_label)
+    )
+
+    p <- p +
+      ggplot2::geom_text(
+        data = duration_labels,
+        ggplot2::aes(x = x_mid, y = box_height * 1.04, label = dur_label),
+        vjust  = 0,
+        size   = 2.6,
+        colour = "grey30"
+      )
+  }
+
+  # ── Layer 1b: direct box labelling ────────────────────────────────────────
+  # Nudged slightly off the event midline (box_height/2) so labels don't sit
+  # directly under event points. check_overlap = TRUE silently drops
+  # colliding labels rather than pulling in a new dependency for collision
+  # avoidance — acceptable here because, unlike show_labels' event labels,
+  # missing a box label is a minor readability loss, not a broken feature.
+  if (label_boxes && nrow(boxes) > 0) {
+    box_labels <- dplyr::mutate(
+      boxes,
+      x_mid = xmin_render + (xmax_render - xmin_render) / 2
+    )
+
+    p <- p +
+      ggplot2::geom_text(
+        data = box_labels,
+        ggplot2::aes(x = x_mid, y = box_height / 2 + 0.06, label = location),
+        size          = 2.6,
+        check_overlap = TRUE
+      )
+  }
+
+  # ── Layer 1c: ongoing-spell indication ────────────────────────────────────
+  # Converse of the terminal-state marker: the case never reached a state
+  # named in terminal_activities — the data feed just stopped. Marks the
+  # final box's right edge as open-ended rather than implying its (inferred)
+  # xmax is a known, true end.
+  if (spell_open && nrow(boxes) > 0) {
+    final_box <- dplyr::slice_tail(boxes, n = 1)
+
+    p <- p +
+      ggplot2::geom_segment(
+        data = final_box,
+        ggplot2::aes(x = xmax, xend = xmax, y = ymin, yend = ymax),
+        colour    = "grey25",
+        linetype  = "dashed",
+        linewidth = 0.8
+      ) +
+      ggplot2::annotate(
+        "text",
+        x        = final_box$xmax,
+        y        = box_height * 1.04,
+        label    = "(ongoing)",
+        hjust    = 1,
+        vjust    = 0,
+        size     = 2.6,
+        fontface = "italic",
+        colour   = "grey25"
+      )
+  }
+
+  # ── Layer 1d: reference / target-threshold lines ─────────────────────────
+  # Reserved y-range [1.12*box_height, 1.3*box_height] per the layout budget —
+  # sits above the duration-label row, never atop the boxes/events below it.
+  if (!is.null(reference_lines)) {
+    ref_lines <- dplyr::mutate(
+      reference_lines,
+      x = first_event_time + offset_hours * 3600
+    )
+
+    p <- p +
+      ggplot2::geom_vline(
+        data      = ref_lines,
+        ggplot2::aes(xintercept = x),
+        colour    = "firebrick",
+        linetype  = "dashed",
+        linewidth = 0.5
+      ) +
+      ggplot2::geom_text(
+        data = ref_lines,
+        ggplot2::aes(x = x, y = box_height * 1.14, label = label),
+        hjust  = -0.05,
+        vjust  = 0,
+        size   = 2.8,
+        colour = "firebrick"
+      )
+  }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
