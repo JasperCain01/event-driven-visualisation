@@ -23,12 +23,23 @@ plot_patient_journey <- function(
     # Which act_type values represent physical location moves (create boxes)
     location_categories = c("location_move", "ed_location_move"),
 
-    # Column name mappings — change these if your data uses different names
+    # Column name mappings — change these if your data uses different names.
+    # patient_col may be NULL for event logs with no secondary identifier.
     time_col        = "timestamp",
     act_type_col    = "act_type",
     activity_col    = "activity",
     case_col        = "caseID",
     patient_col     = "K_Number",
+
+    # Timezone used when parsing character timestamps (POSIXct input keeps
+    # its own tzone). Wall-clock exports from UK systems should pass
+    # "Europe/London" or times shift by an hour across BST.
+    tz = "UTC",
+
+    # Activity values that are terminal states (e.g. "Discharged", "Closed").
+    # A terminal final move renders as a zero-duration marker instead of a
+    # box with an invented duration.
+    terminal_activities = NULL,
 
     # Pre-filter: drop these act_types entirely before plotting (e.g. admin noise)
     exclude_categories = NULL,
@@ -70,7 +81,7 @@ plot_patient_journey <- function(
   )
 
   # ── Validate inputs and get a cleaned single-spell tibble ─────────────────
-  spell <- validate_event_log(data, cols, case_id, location_categories)
+  spell <- validate_event_log(data, cols, case_id, location_categories, tz = tz)
 
   # ── Drop excluded categories now that validation has passed ───────────────
   if (!is.null(exclude_categories)) {
@@ -78,25 +89,41 @@ plot_patient_journey <- function(
     spell    <- dplyr::filter(spell, !(.data[[cols$act_type]] %in% exclude_categories))
     n_after  <- nrow(spell)
     if (n_before != n_after) {
-      cli::cli_inform(
+      cli::cli_inform(c(
         "i" = "Dropped {n_before - n_after} row(s) matching {.arg exclude_categories}."
-      )
+      ))
+    }
+
+    # Exclusion runs after validation, so re-check the guarantee validation
+    # gave us: at least one location event must survive, or box derivation
+    # crashes with an unintelligible error.
+    if (!any(spell[[cols$act_type]] %in% location_categories)) {
+      cli::cli_abort(c(
+        "No location events remain after applying {.arg exclude_categories}.",
+        "x" = "{.arg exclude_categories} removed every row matching
+               {.arg location_categories} ({.val {location_categories}}).",
+        "i" = "Remove {.val {intersect(exclude_categories, location_categories)}}
+               from {.arg exclude_categories}."
+      ))
     }
   }
 
   # ── Build the two derived tables ──────────────────────────────────────────
   tables <- build_journey_tables(spell, cols, location_categories,
-                                 box_height    = box_height,
-                                 tail_strategy = tail_strategy)
+                                 box_height          = box_height,
+                                 tail_strategy       = tail_strategy,
+                                 terminal_activities = terminal_activities)
 
   boxes  <- tables$boxes
   events <- tables$events
 
   # ── Auto-generate title if none supplied ──────────────────────────────────
   if (is.null(title)) {
-    # Pull K_Number from the first row of the spell
-    patient_id <- spell[[cols$patient]][1]
-    title <- paste0("Patient ", patient_id, " — Spell ", case_id)
+    title <- if (is.null(cols$patient)) {
+      paste0("Case ", case_id)
+    } else {
+      paste0("Patient ", spell[[cols$patient]][1], " — Spell ", case_id)
+    }
   }
 
   # ── Assemble opts list consumed by render_journey_plot() ─────────────────
