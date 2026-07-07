@@ -48,6 +48,10 @@ plot_patient_journey <- function(
     show_labels = FALSE,
     label_max   = 30L,
 
+    # Show a formatted duration label above each non-terminal box
+    # (end_inferred boxes get a "+" suffix, since the end time is imputed)
+    show_duration = FALSE,
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
@@ -130,6 +134,7 @@ plot_patient_journey <- function(
   opts <- list(
     show_labels      = show_labels,
     label_max        = label_max,
+    show_duration    = show_duration,
     location_palette = location_palette,
     event_palette    = event_palette,
     box_height       = box_height,

@@ -14,6 +14,7 @@ render_journey_plot <- function(boxes, events, opts) {
   # ── Unpack opts ────────────────────────────────────────────────────────────
   show_labels      <- opts$show_labels
   label_max        <- opts$label_max
+  show_duration    <- opts$show_duration
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   box_height       <- opts$box_height
@@ -84,6 +85,29 @@ render_journey_plot <- function(boxes, events, opts) {
       linewidth = 0,
       alpha     = 0.85
     )
+
+  # ── Layer 1b: duration labels ─────────────────────────────────────────────
+  # Reserved y-range [box_height, 1.12*box_height] per the layout budget —
+  # sits just above the band, never atop the boxes/events/labels below it.
+  # Only non-terminal boxes get a label; end_inferred boxes (the imputed
+  # final stay) are suffixed "+" so the label never overclaims a data-backed end.
+  if (show_duration && nrow(boxes) > 0) {
+    duration_labels <- dplyr::mutate(
+      boxes,
+      x_mid     = xmin_render + (xmax_render - xmin_render) / 2,
+      dur_label = format_duration(as.numeric(duration, units = "secs")),
+      dur_label = ifelse(end_inferred, paste0(dur_label, "+"), dur_label)
+    )
+
+    p <- p +
+      ggplot2::geom_text(
+        data = duration_labels,
+        ggplot2::aes(x = x_mid, y = box_height * 1.04, label = dur_label),
+        vjust  = 0,
+        size   = 2.6,
+        colour = "grey30"
+      )
+  }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical

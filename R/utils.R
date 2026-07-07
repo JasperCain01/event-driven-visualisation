@@ -117,3 +117,32 @@ journey_palette <- function(levels, type = c("location", "event")) {
 # ── Null-coalescing operator ───────────────────────────────────────────────────
 
 `%||%` <- function(x, y) if (!is.null(x)) x else y
+
+
+# ── Duration formatting ────────────────────────────────────────────────────────
+
+# Format a duration given in seconds as a short human-readable string:
+#   < 60      -> "Ns"
+#   < 3600    -> "Nm"
+#   < 86400   -> "Hh Mm" (Mm dropped when zero)
+#   >= 86400  -> "Dd Hh"
+# floor() (not round()) is used throughout the sub-day buckets so a value like
+# 3599s renders as "59m", not "60m" via rounding carry-over into the next unit.
+format_duration <- function(secs) {
+  vapply(as.numeric(secs), function(s) {
+    if (is.na(s)) return(NA_character_)
+    if (s < 60) {
+      paste0(round(s), "s")
+    } else if (s < 3600) {
+      paste0(floor(s / 60), "m")
+    } else if (s < 86400) {
+      h <- floor(s / 3600)
+      m <- floor((s - h * 3600) / 60)
+      if (m == 0) paste0(h, "h") else paste0(h, "h ", m, "m")
+    } else {
+      d <- floor(s / 86400)
+      h <- floor((s - d * 86400) / 3600)
+      paste0(d, "d ", h, "h")
+    }
+  }, character(1))
+}
