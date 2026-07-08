@@ -84,6 +84,13 @@ plot_patient_journey <- function(
     lane_height = NULL,
     lane_gap    = NULL,
 
+    # Fill-legend title. A journey's boxes are "Location" by default, but for a
+    # linear stage process (complaint, ticket, approval pipeline) the exclusive
+    # states are stages/statuses, not places — pass e.g. "Stage" or "Status".
+    # Threaded through opts to scale_fill_manual(name = state_label). The
+    # default reproduces prior output exactly.
+    state_label = "Location",
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
@@ -241,6 +248,9 @@ plot_patient_journey <- function(
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
     title            = title,
+    state_label      = state_label,
+    x_scale          = "datetime",
+    facet_by         = NULL,
     spell_open       = attr(boxes, "spell_open") %||% FALSE,
     lanes_active     = !is.null(lane_col)
   )
