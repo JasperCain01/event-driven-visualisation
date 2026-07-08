@@ -152,6 +152,11 @@ derive_location_boxes <- function(data, cols, location_categories,
 # the duration- and reference-label rows). Each event is placed at its lane's
 # vertical centre. cols$lane = NULL (default) → every event keeps y = midline,
 # output byte-identical to the pre-Stage-4 baseline.
+#
+# Returns list(events = <tibble>, pre_box = <tibble or NULL>): when events
+# precede the first location move, a synthetic "(pre-admission)" box is
+# returned alongside the events rather than attached as an attribute, so the
+# caller doesn't depend on attributes surviving unrelated transformations.
 derive_point_events <- function(data, boxes, cols, location_categories,
                                 box_height  = 1,
                                 lane_height = box_height,
@@ -186,7 +191,7 @@ derive_point_events <- function(data, boxes, cols, location_categories,
       box_id    = integer()
     )
     if (!is.null(lane_col)) empty$lane <- character()
-    return(empty)
+    return(list(events = empty, pre_box = NULL))
   }
 
   # findInterval(t, xmin_vec) returns the index of the largest xmin <= t.
@@ -201,6 +206,7 @@ derive_point_events <- function(data, boxes, cols, location_categories,
   # Separate pre-location events (idx == 0) from in-location events
   pre_loc_mask <- raw_idx == 0L
   n_pre        <- sum(pre_loc_mask)
+  pre_box      <- NULL
 
   if (n_pre > 0) {
     cli::cli_inform(c(
@@ -223,10 +229,6 @@ derive_point_events <- function(data, boxes, cols, location_categories,
       xmin_render  = first_event_ts
     ) |>
       assign_y_bands(box_height = box_height)
-
-    # Prepend to boxes in the calling environment — returned via attribute so
-    # build_journey_tables() can capture it without mutating boxes in place
-    attr(point_data, "pre_box") <- pre_box
 
     # Assign pre-location events to box_id 0
     raw_idx[pre_loc_mask] <- 0L
@@ -271,7 +273,7 @@ derive_point_events <- function(data, boxes, cols, location_categories,
       y      = y_vals
     )
 
-  point_data
+  list(events = point_data, pre_box = pre_box)
 }
 
 
@@ -301,13 +303,14 @@ build_journey_tables <- function(data, cols, location_categories,
 
   # Derive instantaneous events, passing boxes so interval join can run.
   # lane geometry is inert unless cols$lane names a column (swimlanes).
-  events <- derive_point_events(data, boxes, cols, location_categories,
-                                box_height  = box_height,
-                                lane_height = lane_height,
-                                lane_gap    = lane_gap)
+  point_result <- derive_point_events(data, boxes, cols, location_categories,
+                                      box_height  = box_height,
+                                      lane_height = lane_height,
+                                      lane_gap    = lane_gap)
+  events  <- point_result$events
+  pre_box <- point_result$pre_box
 
-  # If pre-location events were found, derive_point_events attaches a pre_box
-  pre_box <- attr(events, "pre_box")
+  # If pre-location events were found, derive_point_events returned a pre_box
   if (!is.null(pre_box)) {
     # Renumber: pre_box gets box_id 0, existing boxes keep their IDs
     boxes <- dplyr::bind_rows(pre_box, boxes) |>

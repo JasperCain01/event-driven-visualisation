@@ -114,14 +114,14 @@ test_that("assign_y_bands offsets correctly for band_index = 1", {
 test_that("standard log produces 6 point events (non-location rows)", {
   log   <- standard_log()
   boxes <- derive_location_boxes(log, cols, loc_cats)
-  evts  <- derive_point_events(log, boxes, cols, loc_cats)
+  evts  <- derive_point_events(log, boxes, cols, loc_cats)$events
   expect_equal(nrow(evts), 6L)
 })
 
 test_that("each event is assigned to the correct box", {
   log   <- standard_log()
   boxes <- derive_location_boxes(log, cols, loc_cats)
-  evts  <- derive_point_events(log, boxes, cols, loc_cats)
+  evts  <- derive_point_events(log, boxes, cols, loc_cats)$events
 
   # hrs(1) and hrs(2) → box 1 (ED: hrs(0)–hrs(4))
   ed_events <- evts |> dplyr::filter(box_id == 1L)
@@ -149,7 +149,7 @@ test_that("event exactly at a box boundary belongs to the next box", {
     dplyr::arrange(timestamp)
 
   boxes <- derive_location_boxes(log, cols, loc_cats)
-  evts  <- derive_point_events(log, boxes, cols, loc_cats)
+  evts  <- derive_point_events(log, boxes, cols, loc_cats)$events
 
   boundary_evt <- evts |> dplyr::filter(activity == "Boundary event")
   expect_equal(boundary_evt$box_id, 2L)
@@ -169,17 +169,18 @@ test_that("events before first location move trigger a pre-admission box", {
   boxes <- derive_location_boxes(log, cols, loc_cats)
 
   expect_message(
-    evts <- derive_point_events(log, boxes, cols, loc_cats),
+    result <- derive_point_events(log, boxes, cols, loc_cats),
     regexp = "pre-admission"
   )
+  evts <- result$events
 
   # The pre-admission event should have box_id == 0
   pre_evt <- evts |> dplyr::filter(box_id == 0L)
   expect_equal(nrow(pre_evt), 1L)
   expect_equal(pre_evt$activity, "Pre-triage call")
 
-  # A pre_box attribute should be attached
-  expect_false(is.null(attr(evts, "pre_box")))
+  # A pre_box should be returned alongside the events
+  expect_false(is.null(result$pre_box))
 })
 
 test_that("returns empty tibble with correct columns when no point events exist", {
@@ -189,7 +190,7 @@ test_that("returns empty tibble with correct columns when no point events exist"
     dplyr::mutate(.orig_row = dplyr::row_number())
 
   boxes <- derive_location_boxes(log, cols, loc_cats)
-  evts  <- derive_point_events(log, boxes, cols, loc_cats)
+  evts  <- derive_point_events(log, boxes, cols, loc_cats)$events
 
   expect_equal(nrow(evts), 0L)
   expect_true("act_type" %in% names(evts))
