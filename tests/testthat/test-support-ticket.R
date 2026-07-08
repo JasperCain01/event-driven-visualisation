@@ -12,17 +12,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/render_interactive.R")
-source("../../R/plot_patient_journey.R")
-source("../../R/stage_ladder.R")
-source("../../R/cohort.R")
-source("../../R/theme.R")
-source("../../R/example_data.R")   # provides `support_ticket_example`
-
 stages <- c("Open", "Assigned", "In Progress", "Waiting on Customer", "Resolved", "Closed")
 
 # ── Dataset sanity ───────────────────────────────────────────────────────────────

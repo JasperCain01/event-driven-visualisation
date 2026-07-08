@@ -29,12 +29,12 @@ make_example_journey <- function() {
     "SP-001",  t(1.25),  "test_ordered",       "FBC, U&E, CRP, Troponin",
     "SP-001",  t(1.50),  "test_ordered",       "ECG",
     "SP-001",  t(1.75),  "obs",                "ECG completed",
-    "SP-001",  t(2.25),  "clerk_review",       "Dr review — query ACS",
+    "SP-001",  t(2.25),  "clerk_review",       "Dr review \u2014 query ACS",
     "SP-001",  t(2.50),  "test_ordered",       "Chest X-Ray",
     "SP-001",  t(3.00),  "obs",                "Repeat troponin",
     "SP-001",  t(3.50),  "clerk_review",       "Cardiology consult requested",
     "SP-001",  t(4.00),  "home_today_change",  "No",
-    "SP-001",  t(4.25),  "clerk_review",       "Decision to admit — AMU",
+    "SP-001",  t(4.25),  "clerk_review",       "Decision to admit \u2014 AMU",
 
     # ── Transfer to ward ─────────────────────────────────────────────────────
     "SP-001",  t(4.75),  "location_move",      "Acute Medical Unit",
@@ -43,13 +43,13 @@ make_example_journey <- function() {
     "SP-001",  t(6.00),  "test_ordered",       "Echo booked",
 
     # ── Overnight ward ───────────────────────────────────────────────────────
-    "SP-001",  t(10.0),  "obs",                "Evening obs — stable",
-    "SP-001",  t(14.0),  "obs",                "Night obs — stable",
+    "SP-001",  t(10.0),  "obs",                "Evening obs \u2014 stable",
+    "SP-001",  t(14.0),  "obs",                "Night obs \u2014 stable",
     "SP-001",  t(18.0),  "obs",                "Early morning obs",
     "SP-001",  t(20.0),  "clerk_review",       "Cardiology review",
     "SP-001",  t(21.0),  "test_ordered",       "Echo completed",
-    "SP-001",  t(22.0),  "clerk_review",       "Echo reviewed — mild LV impairment",
-    "SP-001",  t(24.0),  "obs",                "Midday obs — improving",
+    "SP-001",  t(22.0),  "clerk_review",       "Echo reviewed \u2014 mild LV impairment",
+    "SP-001",  t(24.0),  "obs",                "Midday obs \u2014 improving",
     "SP-001",  t(25.0),  "clerk_review",       "Consultant ward round",
     "SP-001",  t(26.0),  "home_today_change",  "Yes",
 
@@ -58,7 +58,7 @@ make_example_journey <- function() {
     "SP-001",  t(27.5),  "clerk_review",       "TTOs sent to pharmacy",
     "SP-001",  t(28.5),  "clerk_review",       "Discharge letter dictated",
     "SP-001",  t(29.0),  "obs",                "Final obs pre-discharge",
-    "SP-001",  t(30.0),  "clerk_review",       "Pharmacy — drugs dispensed",
+    "SP-001",  t(30.0),  "clerk_review",       "Pharmacy \u2014 drugs dispensed",
 
     # ── Discharge ────────────────────────────────────────────────────────────
     "SP-001",  t(30.5),  "location_move",      "Discharged"
@@ -66,6 +66,20 @@ make_example_journey <- function() {
     dplyr::mutate(K_Number = "K12345", .after = caseID)
 }
 
+#' A synthetic patient journey event log
+#'
+#' A representative event log for a single patient spell, following
+#' Ambulance arrival -> ED -> Acute Medical Unit -> Discharge Lounge ->
+#' Discharged. Mixed in are clinical point events (`obs`, assessments,
+#' tests, doctor reviews) to exercise the instantaneous-event rendering.
+#'
+#' @format A tibble with columns `caseID`, `K_Number`, `timestamp`,
+#'   `act_type`, `activity`.
+#'
+#' @examples
+#' plot_patient_journey(example_journey, case_id = "SP-001")
+#'
+#' @export
 example_journey <- make_example_journey()
 
 
@@ -182,6 +196,33 @@ make_complaint_example <- function() {
     dplyr::select(complaint_id, timestamp, act_type, activity)
 }
 
+#' A synthetic complaint-handling event log
+#'
+#' A deliberately non-spatial event log (eight complaints, each moving
+#' through the fixed stages Acknowledgement -> Triage -> Assigned -> Under
+#' review -> Senior review -> Formal letter sent, recorded as
+#' `act_type = "stage_change"`), used to exercise the linear stage-process
+#' features (`patient_col = NULL`, [plot_stage_ladder()]). Sprinkled point
+#' events (`contact`, `escalation`, `evidence_received`) exercise the
+#' instantaneous-event path. Complaint `"CMP-03"` stalls about three weeks in
+#' "Under review" (a per-stage breach); `"CMP-04"` is still open and never
+#' reaches the formal letter, exercising the ongoing-spell indication.
+#'
+#' @format A tibble with columns `complaint_id`, `timestamp`, `act_type`,
+#'   `activity`.
+#'
+#' @examples
+#' plot_patient_journey(
+#'   complaint_example, case_id = "CMP-01",
+#'   location_categories = "stage_change", case_col = "complaint_id",
+#'   patient_col = NULL, terminal_activities = "Formal letter sent",
+#'   state_label = "Stage"
+#' )
+#' plot_stage_ladder(
+#'   complaint_example, case_id = "CMP-01",
+#'   stage_categories = "stage_change", case_col = "complaint_id"
+#' )
+#' @export
 complaint_example <- make_complaint_example()
 
 
@@ -286,4 +327,29 @@ make_support_ticket_example <- function() {
     dplyr::select(ticket_id, timestamp, act_type, activity)
 }
 
+#' A synthetic support-ticket event log
+#'
+#' Stage 8's third example dataset: it proves the package leaves the
+#' healthcare/NHS sector entirely (`complaint_example` is still
+#' NHS-adjacent). Six support tickets moving through the fixed statuses
+#' Open -> Assigned -> In Progress -> Waiting on Customer -> Resolved ->
+#' Closed, recorded as `act_type = "status_change"`. Sprinkled point events
+#' (`comment_added`, `priority_changed`, `reassigned`, `sla_warning`)
+#' exercise the instantaneous-event path. There is deliberately no patient
+#' column, mirroring `complaint_example`. `"TCK-03"` stalls for days in
+#' "Waiting on Customer" (a per-stage breach) and `"TCK-04"` is still open,
+#' exercising the ongoing-spell indication.
+#'
+#' @format A tibble with columns `ticket_id`, `timestamp`, `act_type`,
+#'   `activity`.
+#'
+#' @examples
+#' plot_patient_journey(
+#'   support_ticket_example, case_id = "TCK-01",
+#'   location_categories = "status_change", case_col = "ticket_id",
+#'   patient_col = NULL, terminal_activities = "Closed",
+#'   state_label = "Status"
+#' )
+#'
+#' @export
 support_ticket_example <- make_support_ticket_example()

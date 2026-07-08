@@ -49,7 +49,7 @@ derive_location_boxes <- function(data, cols, location_categories,
   if (n_boxes == 0) {
     cli::cli_abort(c(
       "No location events found when deriving boxes.",
-      "i" = "This should have been caught by validation — check that
+      "i" = "This should have been caught by validation \u2014 check that
              {.arg exclude_categories} did not remove all location events."
     ))
   }

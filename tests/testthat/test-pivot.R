@@ -6,14 +6,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/plot_patient_journey.R")
-source("../../R/pivot_wide.R")
-
 # ── Shared fixture ────────────────────────────────────────────────────────────
 # 3 cases, cols case_id, patient_id, arrival_time, triage_time, ward_time,
 # discharge_time, diagnosis.
@@ -34,7 +26,6 @@ make_wide_fixture <- function() {
 }
 
 time_cols <- c("arrival_time", "triage_time", "ward_time", "discharge_time")
-
 
 # ── Basic pivot ────────────────────────────────────────────────────────────────
 
@@ -96,7 +87,6 @@ test_that("act_type_map and activity_map override the defaults", {
   expect_true(nrow(discharge_rows) > 0)
 })
 
-
 # ── Validation errors ────────────────────────────────────────────────────────
 
 test_that("missing case_col aborts naming missing and present columns", {
@@ -124,7 +114,6 @@ test_that("location_cols not a subset of time_cols aborts naming the offender", 
   expect_match(conditionMessage(err), "discharge_time")
 })
 
-
 # ── NA milestone handling ────────────────────────────────────────────────────
 
 test_that("NA milestone timestamps are dropped with an informative message", {
@@ -146,7 +135,6 @@ test_that("drop_na = FALSE keeps NA-timestamp rows", {
   expect_true(any(is.na(long$timestamp)))
 })
 
-
 # ── Equal-timestamp milestones (exercises the Stage 0.5 stagger fix) ────────
 
 test_that("equal-timestamp milestones pivot cleanly and render under the universal gate", {
@@ -165,7 +153,6 @@ test_that("equal-timestamp milestones pivot cleanly and render under the univers
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
-
 
 # ── End-to-end into plot_patient_journey() ──────────────────────────────────
 

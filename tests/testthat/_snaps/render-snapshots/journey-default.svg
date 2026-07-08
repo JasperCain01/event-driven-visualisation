@@ -104,6 +104,6 @@
 <text x='414.45' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='12.90px' lengthAdjust='spacingAndGlyphs'>obs</text>
 <text x='453.60' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='44.92px' lengthAdjust='spacingAndGlyphs'>test_ordered</text>
 <text x='524.77' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='20.01px' lengthAdjust='spacingAndGlyphs'>triage</text>
-<text x='10.71' y='16.23' style='font-size: 12.00px; font-weight: bold; font-family: sans;' textLength='168.79px' lengthAdjust='spacingAndGlyphs'>Patient K12345 ... Spell SP-001</text>
+<text x='10.71' y='16.23' style='font-size: 12.00px; font-weight: bold; font-family: sans;' textLength='170.79px' lengthAdjust='spacingAndGlyphs'>Patient K12345 — Spell SP-001</text>
 </g>
 </svg>

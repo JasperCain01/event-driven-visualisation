@@ -121,9 +121,43 @@
 # One row per location stay across the cohort. This is the detail table every
 # other 6a/6c function is built on.
 #
-# include_inferred = FALSE (default) drops the imputed final-stay rows and
-# records how many were removed in attr(result, "n_inferred_excluded"); TRUE
-# keeps every row (the end_inferred column still flags the imputed ones).
+#' Summarise per-stay durations across a cohort
+#'
+#' One row per location stay across the cohort — the detail table the other
+#' aggregate functions build on. Every duration statistic in this package
+#' respects `end_inferred`: the final box of a non-terminal spell has an
+#' *imputed* end time, and including it in a mean length-of-stay would
+#' silently contaminate it with a rendering convenience.
+#'
+#' @param data A data frame or tibble containing the event log for the whole
+#'   cohort.
+#' @param case_ids Character vector of cases to include, or `NULL` (default)
+#'   for every case in `data`.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a location/state move.
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings, as in [plot_patient_journey()].
+#' @param tz Timezone used when parsing character timestamps.
+#' @param terminal_activities Character vector of terminal `activity` values.
+#' @param exclude_categories Character vector of `act_type` values to drop
+#'   before summarising, or `NULL`.
+#' @param tail_strategy Strategy for inferring the final box's end time.
+#' @param include_inferred Logical. `FALSE` (default) drops the imputed
+#'   final-stay rows and records how many were removed in
+#'   `attr(result, "n_inferred_excluded")`; `TRUE` keeps every row (the
+#'   `end_inferred` column still flags the imputed ones).
+#'
+#' @return A tibble with one row per stay (`case_id`, `location`, `xmin`,
+#'   `xmax`, `duration_secs`, `end_inferred`, `terminal`), carrying
+#'   `attr(., "n_inferred_excluded")`.
+#'
+#' @examples
+#' summarise_journey_durations(
+#'   complaint_example, case_col = "complaint_id",
+#'   location_categories = "stage_change", patient_col = NULL
+#' )
+#'
+#' @export
 summarise_journey_durations <- function(
     data,
     case_ids = NULL,
@@ -174,8 +208,28 @@ summarise_journey_durations <- function(
 #
 # n_cases counts every case that visited the location (whether or not its stay
 # was inferred); the statistics are computed only over the *included* stays. A
-# location seen only as an imputed final stay therefore reports its n_cases and
-# n_inferred_excluded with NA statistics when include_inferred = FALSE.
+#' Summarise per-location duration statistics across a cohort
+#'
+#' Built on [summarise_journey_durations()]: one row per distinct location
+#' with the case count, mean/median/p25/p75 dwell in seconds, and the number
+#' of imputed final stays excluded from those statistics.
+#'
+#' @inheritParams summarise_journey_durations
+#'
+#' @return A tibble with one row per location (`location`, `n_cases`,
+#'   `mean_secs`, `median_secs`, `p25_secs`, `p75_secs`,
+#'   `n_inferred_excluded`). `n_cases` counts every case that visited the
+#'   location; the statistics are computed only over the *included* stays, so
+#'   a location seen only as an imputed final stay reports `NA` statistics
+#'   when `include_inferred = FALSE`.
+#'
+#' @examples
+#' summarise_stage_durations(
+#'   complaint_example, case_col = "complaint_id",
+#'   location_categories = "stage_change", patient_col = NULL
+#' )
+#'
+#' @export
 summarise_stage_durations <- function(
     data,
     case_ids = NULL,
@@ -239,9 +293,46 @@ summarise_stage_durations <- function(
 # An unknown scope name aborts with a did-you-mean hint over the locations
 # actually present in the cohort.
 #
-# Returns a tibble (case_id, elapsed_hours, breached, end_inferred) with the
-# cohort breach fraction in attr(result, "breach_rate") and the excluded count
-# in attr(result, "n_inferred_excluded").
+#' Summarise breach rate against a target duration
+#'
+#' What fraction of cases exceed `target_hours`?
+#'
+#' @param data A data frame or tibble containing the event log for the whole
+#'   cohort.
+#' @param target_hours Single numeric target, in hours.
+#' @param scope Either `"spell"` (whole-spell elapsed time: first location
+#'   move to last recorded event — both endpoints are real timestamps, so
+#'   `include_inferred` is a no-op) or the name of a location present in the
+#'   cohort (dwell within that one stage, e.g. the ED 4-hour standard). A
+#'   case that never visited the stage contributes no row. An unknown scope
+#'   name aborts with a did-you-mean hint.
+#' @param case_ids Character vector of cases to include, or `NULL` (default)
+#'   for every case in `data`.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a location/state move.
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings, as in [plot_patient_journey()].
+#' @param tz Timezone used when parsing character timestamps.
+#' @param terminal_activities Character vector of terminal `activity` values.
+#' @param exclude_categories Character vector of `act_type` values to drop
+#'   before summarising, or `NULL`.
+#' @param tail_strategy Strategy for inferring the final box's end time.
+#' @param include_inferred Logical; see [summarise_journey_durations()]. When
+#'   `scope` is a location whose final stay is the imputed final box,
+#'   `FALSE` (default) drops those cases and reports the count.
+#'
+#' @return A tibble (`case_id`, `elapsed_hours`, `breached`, `end_inferred`)
+#'   with the cohort breach fraction in `attr(., "breach_rate")` and the
+#'   excluded count in `attr(., "n_inferred_excluded")`.
+#'
+#' @examples
+#' summarise_breach_rate(
+#'   complaint_example, target_hours = 24 * 7, scope = "spell",
+#'   case_col = "complaint_id", location_categories = "stage_change",
+#'   patient_col = NULL
+#' )
+#'
+#' @export
 summarise_breach_rate <- function(
     data,
     target_hours,
@@ -342,8 +433,28 @@ summarise_breach_rate <- function(
 # dwell is intrinsically real (include_inferred is threaded only for API
 # symmetry and never excludes anything here).
 #
-# Returns a tibble (from_location, to_location, n, mean_dwell_secs,
-# median_dwell_secs), one row per distinct ordered pair, sorted by descending n.
+#' Summarise directed location-to-location transitions across a cohort
+#'
+#' For each case, consecutive stays (ordered by entry time) form a
+#' from -> to pair; the dwell of that transition is the time spent in the
+#' "from" state before the move. A "from" state always has a successor, so
+#' it is never the imputed final box — transition dwell is intrinsically
+#' real (`include_inferred` is threaded only for API symmetry and never
+#' excludes anything here).
+#'
+#' @inheritParams summarise_journey_durations
+#'
+#' @return A tibble (`from_location`, `to_location`, `n`, `mean_dwell_secs`,
+#'   `median_dwell_secs`), one row per distinct ordered pair, sorted by
+#'   descending `n`.
+#'
+#' @examples
+#' summarise_transitions(
+#'   complaint_example, case_col = "complaint_id",
+#'   location_categories = "stage_change", patient_col = NULL
+#' )
+#'
+#' @export
 summarise_transitions <- function(
     data,
     case_ids = NULL,
@@ -414,10 +525,31 @@ summarise_transitions <- function(
 # directed edges are drawn as arrowed curves whose width encodes transition
 # frequency, labelled with the mean dwell in the "from" state.
 #
-# Curvature sign is chosen by direction: forward transitions (to a later node)
-# bow one way, backward transitions the other, so a re-entry loop is visually
-# separable from the forward flow it mirrors — the exact case a mechanical
-# straight-line renderer collapses into an unreadable lie.
+#' Plot a directed transition-flow diagram for a cohort
+#'
+#' A hand-rolled flow diagram: nodes are the distinct locations laid out
+#' left-to-right by their average step index across cases, so the common
+#' forward flow reads as a left-to-right spine; directed edges are drawn as
+#' arrowed curves whose width encodes transition frequency, labelled with
+#' the mean dwell in the "from" state. Forward transitions (to a later node)
+#' bow one way, backward transitions the other, so a re-entry loop is
+#' visually separable from the forward flow it mirrors.
+#'
+#' @inheritParams summarise_journey_durations
+#' @param min_n Only draw transitions observed at least this many times.
+#' @param title Plot title; `NULL` auto-generates one from the case count.
+#' @param return_data Logical; if `TRUE`, return
+#'   `list(plot, nodes, edges, transitions)` instead of just the plot.
+#'
+#' @return A `ggplot` object, or a list when `return_data = TRUE`.
+#'
+#' @examples
+#' plot_transition_summary(
+#'   complaint_example, case_col = "complaint_id",
+#'   location_categories = "stage_change", patient_col = NULL
+#' )
+#'
+#' @export
 plot_transition_summary <- function(
     data,
     case_ids = NULL,
@@ -501,7 +633,7 @@ plot_transition_summary <- function(
 
   if (is.null(title)) {
     n_cases <- dplyr::n_distinct(stays$case_id)
-    title <- paste0("Transition summary — ", n_cases, " case",
+    title <- paste0("Transition summary \u2014 ", n_cases, " case",
                     if (n_cases == 1) "" else "s")
   }
 
@@ -577,10 +709,30 @@ scales_int_breaks <- function(x) {
 
 # ── 6e. Timeline + per-stage duration summary, stacked (stretch) ────────────────
 #
-# patchwork-stacks a single case's timeline (plot_patient_journey) above a bar
-# chart of that case's per-stage dwell. patchwork is a Suggests-only dependency,
-# so this guards with requireNamespace() and an install hint, mirroring the
-# RColorBrewer idiom used elsewhere.
+#' Plot a single case's timeline stacked above its per-stage duration summary
+#'
+#' `patchwork`-stacks a single case's timeline ([plot_patient_journey()])
+#' above a bar chart of that case's per-stage dwell. Requires the
+#' `patchwork` package (Suggests only).
+#'
+#' @param data A data frame or tibble containing the event log.
+#' @param case_id The single case identifier to visualise.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a location/state move.
+#' @param heights Relative heights `c(timeline, bars)` passed to
+#'   `patchwork::wrap_plots()`.
+#' @param ... Additional arguments forwarded to [plot_patient_journey()].
+#'
+#' @return A `patchwork` object.
+#'
+#' @examples
+#' \donttest{
+#' if (requireNamespace("patchwork", quietly = TRUE)) {
+#'   plot_journey_with_summary(example_journey, case_id = "SP-001")
+#' }
+#' }
+#'
+#' @export
 plot_journey_with_summary <- function(
     data, case_id,
     location_categories = c("location_move", "ed_location_move"),

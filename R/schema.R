@@ -13,10 +13,26 @@
 
 # ── Constructor ──────────────────────────────────────────────────────────────
 
-# Every field defaults to NULL ("not part of this schema"). When wired into
-# plot_patient_journey() via its `schema` argument, a NULL field simply falls
-# through to that function's own hardcoded default — and an explicitly
-# supplied individual argument always wins over the schema regardless.
+#' Construct an event log column-name schema
+#'
+#' A lightweight classed list describing how an event log's columns map onto
+#' the roles [plot_patient_journey()] needs. Every field defaults to `NULL`
+#' ("not part of this schema"). When wired into [plot_patient_journey()] via
+#' its `schema` argument, a `NULL` field falls through to that function's own
+#' hardcoded default — and an explicitly supplied individual argument always
+#' wins over the schema regardless.
+#'
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column
+#'   names in the target event log, or `NULL`.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a location/state move, or `NULL`.
+#'
+#' @return An object of class `event_log_schema`.
+#'
+#' @examples
+#' event_log_schema(time_col = "ts", case_col = "spell_id")
+#'
+#' @export
 event_log_schema <- function(time_col = NULL, act_type_col = NULL,
                              activity_col = NULL, case_col = NULL,
                              patient_col = NULL, location_categories = NULL) {
@@ -33,6 +49,12 @@ event_log_schema <- function(time_col = NULL, act_type_col = NULL,
   )
 }
 
+#' Print an event_log_schema object
+#'
+#' @param x An `event_log_schema` object.
+#' @param ... Ignored.
+#' @return `x`, invisibly.
+#' @export
 print.event_log_schema <- function(x, ...) {
   field_line <- function(label, value) {
     shown <- if (is.null(value)) "<not set>" else paste(value, collapse = ", ")
@@ -83,7 +105,7 @@ print.event_log_schema <- function(x, ...) {
   if (length(exact_hits) == 1) return(list(column = exact_hits, method = "exact"))
   if (length(exact_hits) > 1)  return(list(tie = exact_hits))
 
-  dists    <- adist(unclaimed, candidates, ignore.case = TRUE)
+  dists    <- utils::adist(unclaimed, candidates, ignore.case = TRUE)
   best     <- apply(dists, 1, min)
   eligible <- best <= 2
   if (!any(eligible)) return(NULL)
@@ -103,8 +125,27 @@ print.event_log_schema <- function(x, ...) {
 # each data column may be claimed by at most one role — once claimed, it is
 # removed from consideration for every later role.
 #
-# location_categories is a pure passthrough into the returned schema: this
-# function detects *columns*, not the act_type values within them.
+#' Autodetect an event log's column schema
+#'
+#' Builds an [event_log_schema()] by matching `data`'s column names against
+#' built-in per-role candidate lists (exact case-insensitive match first,
+#' then fuzzy `adist() <= 2`). Roles are resolved in a fixed order (time ->
+#' case -> act_type -> activity -> patient) and each data column may be
+#' claimed by at most one role — once claimed, it is removed from
+#' consideration for every later role. A tie between two equally-good
+#' candidates for one role aborts rather than picking silently.
+#'
+#' @param data A data frame or tibble to detect column roles in.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a location/state move — a pure passthrough into the returned schema,
+#'   since this function detects *columns*, not values.
+#'
+#' @return An [event_log_schema()] object.
+#'
+#' @examples
+#' autodetect_schema(example_journey)
+#'
+#' @export
 autodetect_schema <- function(data, location_categories = NULL) {
   if (!is.data.frame(data)) {
     cli::cli_abort(c(

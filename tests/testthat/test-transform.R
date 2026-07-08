@@ -6,10 +6,6 @@
 library(testthat)
 library(dplyr)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")
@@ -45,7 +41,6 @@ standard_log <- function() {
     )
   )
 }
-
 
 # ── derive_location_boxes ──────────────────────────────────────────────────────
 
@@ -113,7 +108,6 @@ test_that("assign_y_bands offsets correctly for band_index = 1", {
   expect_equal(shifted$ymin[1], 1.2)
   expect_equal(shifted$ymax[1], 2.2)
 })
-
 
 # ── derive_point_events ────────────────────────────────────────────────────────
 
@@ -201,7 +195,6 @@ test_that("returns empty tibble with correct columns when no point events exist"
   expect_true("act_type" %in% names(evts))
   expect_true("box_id"   %in% names(evts))
 })
-
 
 # ── build_journey_tables ───────────────────────────────────────────────────────
 

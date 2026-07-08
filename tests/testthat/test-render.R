@@ -10,13 +10,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/plot_patient_journey.R")
-
 # ── Shared fixtures ────────────────────────────────────────────────────────────
 
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")

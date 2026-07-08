@@ -7,15 +7,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/schema.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/plot_patient_journey.R")
-source("../../R/example_data.R")   # provides `example_journey`
-
 # ── Construction / print ─────────────────────────────────────────────────────
 
 test_that("event_log_schema() constructs a classed list with the given fields", {
@@ -38,7 +29,6 @@ test_that("print.event_log_schema() reports every field", {
   expect_match(txt, "location_categories")
   expect_match(txt, "<not set>")   # act_type_col etc. are unset
 })
-
 
 # ── autodetect_schema(): exact + fuzzy recovery ──────────────────────────────
 
@@ -73,7 +63,6 @@ test_that("location_categories is a pure passthrough", {
   expect_equal(s$location_categories, c("a", "b"))
 })
 
-
 # ── autodetect_schema(): ties abort ──────────────────────────────────────────
 
 test_that("two equally-good exact matches for one role abort naming both", {
@@ -89,7 +78,6 @@ test_that("two equally-good exact matches for one role abort naming both", {
   expect_match(conditionMessage(err), "ambiguous")
 })
 
-
 # ── autodetect_schema(): nonsense columns abort naming the role ─────────────
 
 test_that("columns with no plausible match abort, naming the unresolved role(s)", {
@@ -103,7 +91,6 @@ test_that("columns with no plausible match abort, naming the unresolved role(s)"
   msg <- conditionMessage(err)
   expect_match(msg, "event_log_schema")
 })
-
 
 # ── Claimed-column exclusivity ───────────────────────────────────────────────
 
@@ -121,7 +108,6 @@ test_that("a column claimed by an earlier role is not reconsidered by a later ro
   err <- expect_error(autodetect_schema(data))
   expect_match(conditionMessage(err), "activity_col")
 })
-
 
 # ── Wiring into plot_patient_journey(): schema = "auto" ──────────────────────
 
@@ -141,7 +127,6 @@ test_that("schema is never autodetected unless the literal sentinel \"auto\" is 
     suppressMessages(plot_patient_journey(example_journey, case_id = "SP-001", schema = s))
   )
 })
-
 
 # ── Per-field precedence ──────────────────────────────────────────────────────
 
@@ -199,7 +184,6 @@ test_that("patient_col = NULL explicitly requested is honoured even with a schem
     )
   )
 })
-
 
 # ── Earlier suites pass untouched with no schema argument ───────────────────
 

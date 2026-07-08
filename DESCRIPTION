@@ -2,7 +2,11 @@ Package: eventviz
 Version: 0.1.0
 Title: Event Log Visualisation Package
 Description: A general-purpose package for visualising patient journey event logs.
+Authors@R: person("Jasper", "Cain", role = c("aut", "cre"),
+    email = "jcainsecondemail@gmail.com")
 License: MIT + file LICENSE
+Encoding: UTF-8
 Imports: dplyr, tibble, ggplot2, ggrepel, cli, lubridate, rlang, stats, utils, tidyr
 Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown
 Config/testthat/edition: 3
+RoxygenNote: 7.3.1

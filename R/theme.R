@@ -10,6 +10,23 @@
 # calls compose additively, splitting the theme across two calls like this
 # produces the exact same final theme as one call would — extracting this
 # is purely DRY, not a behaviour change.
+
+#' Shared base ggplot2 theme for eventviz renderers
+#'
+#' Factors out the [ggplot2::theme_minimal()] call plus the grid-line and
+#' title styling common to every renderer in this package (the band layout
+#' and the staircase). Each renderer layers its own additional
+#' [ggplot2::theme()] customisations on top.
+#'
+#' @param base_size Base font size, in points, passed to
+#'   [ggplot2::theme_minimal()].
+#'
+#' @return A ggplot2 `theme` object.
+#'
+#' @examples
+#' th <- theme_journey(base_size = 11)
+#'
+#' @export
 theme_journey <- function(base_size = 11) {
   ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(

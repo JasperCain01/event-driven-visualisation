@@ -16,12 +16,81 @@
 # this at complaint_example or support_ticket_example as readily as a
 # patient spell.
 #
-# Source all files in R/ to use:
-#   source("R/utils.R"); source("R/validate.R"); source("R/schema.R")
-#   source("R/transform.R"); source("R/render.R"); source("R/render_interactive.R")
-#   source("R/plot_patient_journey.R")
-
-
+#' Visualise an event log as a location-band timeline
+#'
+#' Renders one case's event log as a horizontal timeline: coloured boxes for
+#' each exclusive state the case occupies over time (a ward, a complaint
+#' stage, a ticket status — anything `location_categories` marks as a move),
+#' with instantaneous events plotted as points on the midline. Despite the
+#' name (kept for backward compatibility), this works for any event log built
+#' from exclusive states over time, not just clinical spells.
+#'
+#' @param data A data frame or tibble containing the event log.
+#' @param case_id The single case identifier to visualise (must be present in
+#'   `data[[case_col]]`).
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a move to a new exclusive state (these events create boxes).
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings. `patient_col` may be `NULL` for event logs with no secondary
+#'   identifier.
+#' @param schema An [event_log_schema()] object bundling the column-mapping
+#'   arguments, or the literal string `"auto"` to run [autodetect_schema()],
+#'   or `NULL` (default) to ignore. Per-field precedence, highest wins: an
+#'   explicitly supplied individual argument (`time_col`, `case_col`, ...) >
+#'   the matching schema field > this function's own hardcoded default.
+#' @param tz Timezone used when parsing character timestamps (`POSIXct`
+#'   input keeps its own `tzone`).
+#' @param terminal_activities Character vector of `activity` values that are
+#'   terminal states (e.g. `"Discharged"`, `"Closed"`). A terminal final move
+#'   renders as a zero-duration marker instead of a box with an invented
+#'   duration.
+#' @param exclude_categories Character vector of `act_type` values to drop
+#'   entirely before plotting, or `NULL`.
+#' @param show_labels Logical; show `ggrepel` labels for point events.
+#' @param label_max Maximum label character length before truncation.
+#' @param show_duration Logical; show a formatted duration label above each
+#'   non-terminal box (`end_inferred` boxes get a `"+"` suffix).
+#' @param label_boxes Logical; label each box directly with its location
+#'   name, at box centre.
+#' @param reference_lines Data frame with `offset_hours` (numeric, hours from
+#'   the spell's first event) and `label`, drawn as dashed target-threshold
+#'   lines, or `NULL`.
+#' @param event_type_top_n When the distinct `act_type` count exceeds this,
+#'   keep the top-N most frequent event types and recode the rest to
+#'   `"Other"`. `NULL` = no bucketing.
+#' @param lane_col Column in `data` whose distinct values become swimlanes
+#'   for point events, drawn above the location band. `NULL` (default) keeps
+#'   a single midline.
+#' @param lane_height,lane_gap Swimlane geometry, in `box_height` units.
+#'   `NULL` defaults to `box_height` and `0.05 * box_height` respectively.
+#' @param state_label Fill-legend title. A journey's boxes are `"Location"`
+#'   by default; pass e.g. `"Stage"` or `"Status"` for a linear stage
+#'   process.
+#' @param location_palette,event_palette Named character vectors (level ->
+#'   hex colour) overriding the automatic palettes, or `NULL`.
+#' @param palette_style Auto-palette style used when `location_palette`/
+#'   `event_palette` are `NULL`: `"okabe"` (default, colourblind-safe) or
+#'   `"brewer"` (the original Set2/Dark2 palette).
+#' @param box_height Height of the location band, in plot y-units.
+#' @param box_gap_prop Proportion of each box's width trimmed from its right
+#'   edge to create a thin visual gap between adjacent locations.
+#' @param title Plot title; `NULL` auto-generates one from `case_id` /
+#'   `patient_col`.
+#' @param tail_strategy Strategy for inferring the final box's end time:
+#'   `"last_event"` extends to the last event, falling back to `"median"`
+#'   then `"fixed"`.
+#' @param interactive Logical; render as an interactive `ggiraph` `girafe`
+#'   widget instead of a static ggplot. Requires the `ggiraph` package.
+#' @param return_data Logical; if `TRUE`, return
+#'   `list(plot, boxes, events, summary)` instead of just the plot.
+#'
+#' @return A `ggplot` object (or a `girafe` widget when `interactive = TRUE`),
+#'   or a list when `return_data = TRUE`.
+#'
+#' @examples
+#' plot_patient_journey(example_journey, case_id = "SP-001")
+#'
+#' @export
 plot_patient_journey <- function(
     data,
 
@@ -254,7 +323,7 @@ plot_patient_journey <- function(
     title <- if (is.null(cols$patient)) {
       paste0("Case ", case_id)
     } else {
-      paste0("Patient ", spell[[cols$patient]][1], " — Spell ", case_id)
+      paste0("Patient ", spell[[cols$patient]][1], " \u2014 Spell ", case_id)
     }
   }
 
