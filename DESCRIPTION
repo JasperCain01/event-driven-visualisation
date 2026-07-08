@@ -7,6 +7,7 @@ Authors@R: person("Jasper", "Cain", role = c("aut", "cre"),
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: dplyr, tibble, ggplot2, ggrepel, cli, lubridate, rlang, stats, utils, tidyr
-Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown
+Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown, covr, pkgdown
 Config/testthat/edition: 3
 RoxygenNote: 7.3.1
+URL: https://jaspercain01.github.io/event-driven-visualisation/
