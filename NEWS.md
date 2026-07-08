@@ -1,4 +1,54 @@
-# eventviz (development version)
+# eventviz 0.1.0
+
+Initial release. Turns the original single-file patient-journey timeline
+script into a general-purpose event-log visualisation package: location-band
+timelines, staircase stage diagrams for location-less linear processes,
+cohort facets, aggregate/statistical summaries, an interactive renderer, and
+three example datasets spanning healthcare, complaints, and support tickets.
+
+## Stage 10 — Documentation & packaging polish
+
+* Added a `pkgdown` site (`_pkgdown.yml` + a `pkgdown.yaml` GitHub Actions
+  workflow deploying to GitHub Pages) and four vignettes:
+  `getting-started` (the clinical walkthrough), `adapting-your-data`
+  (schema autodetection + the wide-to-long pivot wrapper together, for
+  bringing your own data), `linear-processes` (band vs. staircase for
+  complaints/tickets, and `stage_targets`), and `cohort-analysis` (facets +
+  aggregate/breach/transition summaries).
+* Rewrote `README.Rmd` to lead with the general framing ("visualise any
+  timestamped event log"), a quick-start on `example_journey`, then a
+  "Not just healthcare" section showing `complaint_example` (staircase) and
+  `support_ticket_example` (band + cohort).
+
+## Stage 9 — Test gap-closing & internal cleanup
+
+* Added direct tests for `plot_patient_journey()`'s own orchestration logic
+  that nothing else exercised: auto-generated title format (with and
+  without `patient_col`, and explicit-title override), `exclude_categories`
+  row-count accounting (the drop message, the no-op case, and the abort
+  when every location event is removed), and the full
+  `return_data = TRUE` shape (`list(plot, boxes, events, summary)`, checked
+  against `summarise_journey_durations()` for the same case).
+* Added the vdiffr baseline `support_ticket_example` was still missing
+  (lanes/cohort/ladder already had one from their own stages).
+* Internal: `derive_point_events()` now returns `list(events, pre_box)`
+  instead of attaching the synthetic pre-admission box as an
+  `attr(events, "pre_box")` attribute that happened to survive only because
+  dplyr preserves unknown attributes through `mutate()`. Behaviour
+  unchanged.
+* Wired `covr`/Codecov into CI (`test-coverage.yaml`), targeting 85%
+  project coverage.
+* Fixed several packaging defects uncovered while doing the above, which
+  had been silently blocking Stage 10 and CI from ever running correctly:
+  `DESCRIPTION` was missing `Encoding: UTF-8`, which corrupted the em-dash
+  characters in titles/labels at parse time — this had already corrupted
+  the Stage 1.5 vdiffr baselines captured in an earlier session, now
+  regenerated correctly; the CI workflow lived in a directory literally
+  named `\.github` (a stray backslash) and had therefore never run; the
+  hand-written `NAMESPACE` exported only 2 of the ~19 public functions; and
+  no R file had any roxygen2 documentation. Every exported function and
+  dataset now has full documentation, and `NAMESPACE`/`man/` are generated
+  from it rather than maintained by hand.
 
 ## Stage 8 — Generalisation polish
 
@@ -171,6 +221,39 @@
   `case_id` (a natural, common choice — and the one used throughout the new
   pivot wrapper's own examples). Fixed by forcing environment lookup
   (`.env$case_id`). No change to previously-passing behaviour.
+
+## Stage 0.5 — Defect fixes (sanctioned default-output change)
+
+Nine defects found in an executed review, fixed ahead of the package
+scaffolding since later stages build on the corrected semantics. This is
+the first of the two intentional default-output changes for 0.1.0 (the
+other being the Stage 1f palette): broken behaviour is not API surface.
+
+* `show_labels = TRUE` silently dropped every label (labels nudged below a
+  hard `scale_y_continuous(limits = ...)` were censored to `NA`). Fixed by
+  expanding the lower y-range only when labels will actually render.
+* Terminal states (e.g. "Discharged") were extended into a fake multi-hour
+  stay by the median tail-inference fallback. New opt-in
+  `terminal_activities` parameter: a terminal final move gets zero duration
+  and renders as a vertical marker with an italic direct label.
+* The zero-width-nudge message claimed "stored duration is unaffected"
+  while duration was actually computed *after* the nudge. `duration` is now
+  computed before nudging, so a same-timestamp stay correctly stores 0.
+* A nudged box could render hidden behind its successor (same-timestamp
+  moves). A render-only `xmin_render` stagger fixes the overlap without
+  touching the true `xmin` that event assignment depends on.
+* Three cryptic crash paths now abort with actionable messages: a
+  mistyped `tail_strategy`, `exclude_categories` removing every location
+  event, and a vector/`NA` `case_id`.
+* Character timestamps were silently parsed as UTC regardless of the
+  data's actual timezone. New `tz` parameter threaded through to
+  `lubridate::as_datetime()`; `POSIXct` input keeps its own `tzone`.
+* `patient_col` was mandatory. `patient_col = NULL` is now supported for
+  event logs with no secondary identifier.
+* Two side-by-side legends could overflow the plot width. Legends now
+  stack vertically.
+* `exclude_categories` crashed on every use that actually dropped rows (a
+  malformed `cli::cli_inform()` call with no `message` argument).
 
 ## Stage 1 — Visual quick wins
 
