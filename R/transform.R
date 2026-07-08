@@ -317,3 +317,28 @@ build_journey_tables <- function(data, cols, location_categories,
 
   list(boxes = boxes, events = events)
 }
+
+
+# ── .stays_from_boxes ───────────────────────────────────────────────────────────
+#
+# Reshape a derived `boxes` table into a per-stay summary row set: one row per
+# location stay with its duration in seconds and the terminal / end_inferred
+# flags. Shared by plot_patient_journey()'s return_data path (Stage 6d) and the
+# cohort summarisers in aggregate.R, so a single-case summary and the cohort
+# summary for that case agree exactly. The synthetic "(pre-admission)" box
+# (box_id 0, injected by derive_point_events() for events preceding the first
+# move) is dropped: it is a rendering artefact, not a recorded stay.
+.stays_from_boxes <- function(boxes, case_id) {
+  b <- boxes
+  if ("box_id" %in% names(b)) b <- b[b$box_id != 0, , drop = FALSE]
+
+  dplyr::tibble(
+    case_id       = case_id,
+    location      = b$location,
+    xmin          = b$xmin,
+    xmax          = b$xmax,
+    duration_secs = as.numeric(b$duration, units = "secs"),
+    end_inferred  = b$end_inferred,
+    terminal      = b$terminal
+  )
+}
