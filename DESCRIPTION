@@ -1,7 +1,13 @@
 Package: eventviz
 Version: 0.1.0
-Title: Event Log Visualisation Package
-Description: A general-purpose package for visualising patient journey event logs.
+Title: Event Log Visualisation
+Description: Visualise any timestamped event log as a location-band timeline,
+    a staircase diagram for linear stage processes, faceted cohort
+    comparisons, or aggregate/statistical summaries. Originally built for
+    patient journeys through clinical locations, but equally suited to any
+    process where a case occupies one exclusive state at a time - a
+    complaint moving through handling stages, a support ticket through
+    statuses, an order through an approval pipeline.
 Authors@R: person("Jasper", "Cain", role = c("aut", "cre"),
     email = "jcainsecondemail@gmail.com")
 License: MIT + file LICENSE
