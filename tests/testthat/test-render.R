@@ -14,6 +14,7 @@ source("../../R/utils.R")
 source("../../R/validate.R")
 source("../../R/transform.R")
 source("../../R/render.R")
+source("../../R/theme.R")
 source("../../R/plot_patient_journey.R")
 
 # ── Shared fixtures ────────────────────────────────────────────────────────────

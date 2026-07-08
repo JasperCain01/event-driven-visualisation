@@ -1,5 +1,51 @@
 # eventviz (development version)
 
+## Stage 8 — Generalisation polish
+
+* New `support_ticket_example` dataset: six support tickets moving through
+  Open -> Assigned -> In Progress -> Waiting on Customer -> Resolved ->
+  Closed, with point events (`comment_added`, `priority_changed`,
+  `reassigned`, `sla_warning`), no patient column, one ticket stalled for
+  days in "Waiting on Customer", and one still open. Deliberately
+  non-healthcare, proving the package leaves the NHS sector entirely
+  (`complaint_example` from Stage 5b is still NHS-adjacent). Exercised
+  end-to-end through `plot_patient_journey()` (`state_label = "Status"`),
+  `plot_stage_ladder()`, and `plot_journey_cohort()`.
+* New `theme_journey(base_size = 11)` in `R/theme.R` factors out the
+  `theme_minimal()` call plus the grid-line and title styling shared by
+  `render_journey_plot()` and `plot_stage_ladder()`; each renderer layers its
+  own legend/axis/margin customisations on top. Output is unchanged — verified
+  by comparing the two renderers' computed themes before and after the
+  extraction, in addition to the existing vdiffr baselines.
+* Light terminology pass: `plot_patient_journey()`'s header comment and the
+  `location_categories` parameter comment now describe "location" generically
+  (any exclusive state — a ward, a complaint stage, a ticket status, a
+  pipeline step). No parameter names changed.
+
+## Stage 7 — Interactive renderer
+
+* `plot_patient_journey()` gains `interactive = FALSE`. When `TRUE`, it
+  returns a `ggiraph::girafe()` widget instead of a static `ggplot`: location
+  boxes, terminal-state markers, and event points all gain hover tooltips.
+  Box tooltips show the location, `format_duration()`-formatted duration,
+  and entry/exit times, with an explicit `"(end inferred)"` / `"(inferred)"`
+  caveat when the box's end is imputed — a tooltip must never overclaim an
+  end any more than the `show_duration` label may. Requires the `ggiraph`
+  package (Suggests only); a `requireNamespace()` guard aborts with an
+  install hint if it's missing.
+* Internal: `journey_layers()` gains an `opts$interactive` switch that emits
+  ggiraph's tooltip-bearing geoms (`geom_rect_interactive()`,
+  `geom_segment_interactive()`, `geom_text_interactive()`,
+  `geom_point_interactive()`) in place of their static equivalents for
+  exactly the box/terminal-marker/point-event layers; every other layer
+  (duration labels, reference lines, ggrepel event labels) is unaffected.
+  New `render_journey_plot_interactive()` (`R/render_interactive.R`) calls
+  `render_journey_plot()` with `opts$interactive = TRUE` and wraps the result
+  in `girafe()` — no layer-building logic is duplicated.
+* `interactive = FALSE` (the default) is untouched: the static layers stay
+  the exact pre-Stage-7 `ggplot2::geom_*` classes, so every existing vdiffr
+  baseline still applies unchanged.
+
 ## Stage 6 — Cohort aggregate / statistical views
 
 * New `summarise_journey_durations()` returns one row per location stay across a
