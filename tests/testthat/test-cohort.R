@@ -69,6 +69,27 @@ test_that("align_start puts every case's first box at elapsed hour 0", {
   expect_true(all(firsts$first_xmin == 0))
 })
 
+test_that("align_start does not error when a case has zero point events", {
+  # A case with no point events keeps events$x/timestamp as POSIXct unless
+  # .rebase_to_elapsed_hours() rebases it too - bind_rows() across cases then
+  # fails to reconcile a numeric column (rebased cases) with a POSIXct one
+  # (the empty-events case). Regression test for that mismatch.
+  log_no_events <- dplyr::bind_rows(
+    cohort_log(),
+    tibble::tibble(
+      caseID    = "C4", K_Number = "K4",
+      timestamp = c(hrs(70), hrs(72)),
+      act_type  = c("ed_location_move", "location_move"),
+      activity  = c("ED", "Ward")
+    )
+  )
+  expect_no_error(
+    p <- plot_journey_cohort(log_no_events, align_start = TRUE)
+  )
+  expect_s3_class(p, "ggplot")
+  expect_no_warning(ggplot2::ggplot_build(p))
+})
+
 test_that("absolute mode keeps each case on its own datetime range", {
   res <- plot_journey_cohort(cohort_log(), return_data = TRUE)
   expect_s3_class(res$boxes$xmin, "POSIXct")

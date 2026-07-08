@@ -23,6 +23,13 @@
 # start-aligned cases share a "+Nh" axis. The `duration` column is deliberately
 # left as a difftime: it feeds format_duration() for the duration labels and
 # must keep true clock units, not be reinterpreted as hours.
+#
+# Always rebases events$x/timestamp, even when events has zero rows: hrs()
+# is safe on an empty POSIXct vector (difftime() returns numeric(0)), and
+# skipping the conversion left a case with no point events holding onto its
+# original POSIXct type while every other case's events became numeric -
+# dplyr::bind_rows() across cases then failed to reconcile the mismatched
+# column types for align_start = TRUE cohorts.
 .rebase_to_elapsed_hours <- function(boxes, events) {
   origin <- min(boxes$xmin)
   hrs <- function(x) as.numeric(difftime(x, origin, units = "hours"))
@@ -31,10 +38,8 @@
   boxes$xmax        <- hrs(boxes$xmax)
   boxes$xmin_render <- hrs(boxes$xmin_render)
 
-  if (nrow(events) > 0) {
-    events$x         <- hrs(events$x)
-    events$timestamp <- hrs(events$timestamp)
-  }
+  events$x         <- hrs(events$x)
+  events$timestamp <- hrs(events$timestamp)
 
   list(boxes = boxes, events = events)
 }
