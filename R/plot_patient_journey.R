@@ -72,6 +72,18 @@ plot_patient_journey <- function(
     # scales are built. NULL = no bucketing.
     event_type_top_n = NULL,
 
+    # Swimlanes: stack concurrent point-event tracks into horizontal lanes.
+    # `lane_col` names a column in `data` whose distinct values become lanes
+    # drawn above the location band; it affects point events only (the location
+    # boxes stay the spine). Lane order is factor levels if the column is a
+    # factor, else first appearance. NULL (default) → single midline, output
+    # byte-identical to the pre-Stage-4 baseline. `lane_height`/`lane_gap` tune
+    # lane geometry and default (NULL) to `box_height` and `0.05 * box_height`.
+    # Note: many lanes make a tall plot — there is no automatic lane cap.
+    lane_col    = NULL,
+    lane_height = NULL,
+    lane_gap    = NULL,
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
@@ -126,15 +138,44 @@ plot_patient_journey <- function(
     if (missing(location_categories) && !is.null(schema$location_categories)) location_categories <- schema$location_categories
   }
 
+  # ── Resolve swimlane geometry (relative to box_height) and validate lane_col ─
+  # Defaults are expressed relative to box_height rather than baked into the
+  # signature so they track a caller-supplied box_height.
+  if (is.null(lane_height)) lane_height <- box_height
+  if (is.null(lane_gap))    lane_gap    <- 0.05 * box_height
+
+  if (!is.null(lane_col)) {
+    if (!is.character(lane_col) || length(lane_col) != 1L) {
+      cli::cli_abort(c(
+        "{.arg lane_col} must be a single column name or {.code NULL}.",
+        "x" = "You supplied an object of class {.cls {class(lane_col)}}."
+      ))
+    }
+    if (!lane_col %in% names(data)) {
+      suggestions <- suggest_matches(lane_col, names(data))
+      hint <- if (length(suggestions) > 0) {
+        cli::format_inline("Did you mean {.val {suggestions}}?")
+      } else {
+        cli::format_inline("Columns present in {.arg data}: {.val {names(data)}}")
+      }
+      cli::cli_abort(c(
+        "{.arg lane_col} {.val {lane_col}} was not found in {.arg data}.",
+        "i" = hint
+      ))
+    }
+  }
+
   # ── Resolve column names into a single named list ─────────────────────────
   # All downstream functions use this list rather than the raw arg names, so
-  # renaming an argument never requires touching the internals.
+  # renaming an argument never requires touching the internals. `lane` is NULL
+  # unless swimlanes were requested (validate/transform treat NULL as absent).
   cols <- list(
     time     = time_col,
     act_type = act_type_col,
     activity = activity_col,
     case     = case_col,
-    patient  = patient_col
+    patient  = patient_col,
+    lane     = lane_col
   )
 
   # ── Validate inputs and get a cleaned single-spell tibble ─────────────────
@@ -170,7 +211,9 @@ plot_patient_journey <- function(
   tables <- build_journey_tables(spell, cols, location_categories,
                                  box_height          = box_height,
                                  tail_strategy       = tail_strategy,
-                                 terminal_activities = terminal_activities)
+                                 terminal_activities = terminal_activities,
+                                 lane_height         = lane_height,
+                                 lane_gap            = lane_gap)
 
   boxes  <- tables$boxes
   events <- tables$events
@@ -198,7 +241,8 @@ plot_patient_journey <- function(
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
     title            = title,
-    spell_open       = attr(boxes, "spell_open") %||% FALSE
+    spell_open       = attr(boxes, "spell_open") %||% FALSE,
+    lanes_active     = !is.null(lane_col)
   )
 
   # ── Render ────────────────────────────────────────────────────────────────
