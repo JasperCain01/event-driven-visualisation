@@ -1,5 +1,44 @@
 # eventviz (development version)
 
+## Stage 5b — Linear stage processes (staircase view)
+
+* New `plot_stage_ladder()` renders a strictly linear stage process (a
+  complaint, an approval pipeline, a ticket lifecycle) as a Gantt-like
+  staircase: stages on the y-axis with the first stage at the top, one
+  horizontal segment per stage, thin grey connectors forming the steps, and
+  duration labels at each segment midpoint. It reuses `derive_location_boxes()`
+  verbatim (stages *are* boxes) — only the rendering differs.
+* `plot_stage_ladder()` accepts `stage_order` to pin the vertical ordering
+  (default: first appearance) and `stage_targets`, a named `stage -> hours`
+  vector rendering a light allowance band per targeted stage with any excess
+  dwell drawn in `firebrick`. The terminal stage is drawn as a point marker,
+  not a segment.
+* `plot_patient_journey()` gains a `state_label` argument (default
+  `"Location"`) setting the fill-legend title, so a complaint's boxes read as
+  "Stage" and a ticket's as "Status". Default output is unchanged.
+* New `complaint_example` dataset: eight complaints moving through
+  Acknowledgement -> Triage -> Assigned -> Under review -> Senior review ->
+  Formal letter sent, with no patient column (exercising `patient_col = NULL`).
+  One complaint stalls ~3 weeks in "Under review" and one is still open,
+  exercising the per-stage breach and ongoing-spell paths respectively.
+
+## Stage 5 — Cohort view via faceting
+
+* New `plot_journey_cohort()` lays several spells out as a faceted
+  small-multiples grid, one panel per case, for at-a-glance comparison. It
+  reuses the single-case `validate_event_log()` + `build_journey_tables()`
+  pipeline per case rather than re-deriving anything, and asserts cross-facet
+  colour consistency (the same location keeps the same fill in every panel).
+* `align_start = TRUE` rebases every case to elapsed hours from its own first
+  move and draws them on one shared `+Nh` axis (`scales = "fixed"`) so
+  durations line up; the default absolute-time mode gives each panel its own
+  datetime range (`scales = "free_x"`). A `max_cases` guard (default 25)
+  aborts rather than attempting to facet hundreds of spells.
+* Internal: the ggplot renderer was split into `journey_layers()` (geoms only)
+  plus scale/theme assembly, and gained an `x_scale` option
+  (`"datetime"` / `"elapsed_hours"`) and optional faceting. The single-case
+  path is byte-identical — every existing vdiffr baseline is unchanged.
+
 ## Stage 4 — Swimlanes (concurrent event tracks within one case)
 
 * `plot_patient_journey()` gains a `lane_col` argument. When supplied, its
