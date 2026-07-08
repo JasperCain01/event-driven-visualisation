@@ -259,8 +259,12 @@ plot_patient_journey <- function(
   p <- render_journey_plot(boxes, events, opts)
 
   # ── Return ────────────────────────────────────────────────────────────────
+  # return_data additionally carries a per-stay duration summary (Stage 6d),
+  # built from the boxes just derived so it agrees exactly with the cohort-level
+  # summarise_journey_durations() for this case.
   if (return_data) {
-    list(plot = p, boxes = boxes, events = events)
+    summary <- .stays_from_boxes(boxes, case_id)
+    list(plot = p, boxes = boxes, events = events, summary = summary)
   } else {
     p
   }

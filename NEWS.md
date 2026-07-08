@@ -1,5 +1,35 @@
 # eventviz (development version)
 
+## Stage 6 — Cohort aggregate / statistical views
+
+* New `summarise_journey_durations()` returns one row per location stay across a
+  cohort (case, location, entry/exit, duration, `end_inferred`, `terminal`), and
+  `summarise_stage_durations()` builds per-location statistics on it (case count,
+  mean/median/p25/p75 dwell, `n_inferred_excluded`).
+* New `summarise_breach_rate(data, target_hours, scope = ...)` reports what
+  fraction of cases exceed a target. `scope = "spell"` measures whole-spell
+  elapsed time (first move to last event); `scope = "<location>"` measures dwell
+  within one stage (e.g. the ED 4-hour standard). An unknown scope name aborts
+  with a did-you-mean hint.
+* New `summarise_transitions()` reduces the cohort to directed
+  location-to-location transitions with counts and mean/median dwell in the
+  origin state, and `plot_transition_summary()` draws them as a hand-rolled flow
+  diagram (no new dependency): nodes ordered along a left-to-right spine, arrowed
+  edges whose width encodes frequency, forward and backward transitions bowed
+  opposite ways so re-entries stay legible.
+* **Every duration statistic respects `end_inferred`.** The imputed end of a
+  non-terminal final stay is a rendering convenience, not data; each summariser
+  takes `include_inferred = FALSE` (default), excluding those durations from
+  means/medians/quantiles and reporting `n_inferred_excluded`. `TRUE` folds them
+  back in, with the `end_inferred` flag travelling in the output.
+* `plot_patient_journey(return_data = TRUE)` now also returns a `summary`
+  element (`summarise_journey_durations()` for that one case), so the return
+  value is `list(plot, boxes, events, summary)`. Additive — existing callers are
+  unaffected.
+* New `plot_journey_with_summary()` (stretch) stacks a single case's timeline
+  above a per-stage dwell bar chart via `patchwork`, guarded with a
+  `requireNamespace()` install hint.
+
 ## Stage 5b — Linear stage processes (staircase view)
 
 * New `plot_stage_ladder()` renders a strictly linear stage process (a
