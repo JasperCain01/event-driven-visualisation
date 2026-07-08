@@ -11,6 +11,13 @@ location-band timelines, staircase stage diagrams, cohort facets, and
 aggregate/statistical summaries. See [plot_patient_journey()] to get
 started.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://jaspercain01.github.io/event-driven-visualisation/}
+}
+
+}
 \author{
 \strong{Maintainer}: Jasper Cain \email{jcainsecondemail@gmail.com}
 
