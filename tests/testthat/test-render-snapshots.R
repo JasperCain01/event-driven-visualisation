@@ -100,3 +100,30 @@ test_that("all-Stage-1-features journey plot matches its baseline", {
   )
   vdiffr::expect_doppelganger("journey-all-features", p)
 })
+
+# ── 8. Swimlanes (Stage 4 combined view) ────────────────────────────────────────
+# The combined-features view re-approved with lanes switched on. Point events
+# are split into clinical tracks above the location band; duration labels and
+# the reference line sit below the lane floor by construction.
+
+example_journey_laned <- dplyr::mutate(
+  example_journey,
+  lane = dplyr::case_when(
+    act_type == "obs"          ~ "Nursing",
+    act_type == "test_ordered" ~ "Diagnostics",
+    TRUE                        ~ "Medical"
+  )
+)
+
+test_that("swimlane journey plot matches its baseline", {
+  skip_if_not_installed("vdiffr")
+  p <- suppressMessages(
+    plot_patient_journey(
+      example_journey_laned, case_id = "SP-001",
+      lane_col        = "lane",
+      show_duration   = TRUE,
+      reference_lines = data.frame(offset_hours = 4, label = "4h target")
+    )
+  )
+  vdiffr::expect_doppelganger("journey-swimlanes", p)
+})

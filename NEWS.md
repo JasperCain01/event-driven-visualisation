@@ -1,5 +1,23 @@
 # eventviz (development version)
 
+## Stage 4 — Swimlanes (concurrent event tracks within one case)
+
+* `plot_patient_journey()` gains a `lane_col` argument. When supplied, its
+  distinct values become horizontal lanes and point events are stacked into
+  them above the location band, so concurrent tracks within a single case
+  (e.g. nursing / medical / diagnostics activity) no longer collide on one
+  midline. Lanes affect point events only — the location boxes stay the
+  spine. Lane order follows factor levels when the column is a factor, else
+  first appearance.
+* New `lane_height` / `lane_gap` arguments tune lane geometry; they default
+  (`NULL`) to `box_height` and `0.05 * box_height`. Lanes stack upward from
+  the reserved swimlane floor at `box_height * 1.3`, above the duration- and
+  reference-label rows.
+* The y-axis now labels each lane when swimlanes are active and stays blank
+  otherwise. Many lanes make a tall plot — there is no automatic lane cap.
+* `lane_col = NULL` (the default) reproduces the pre-Stage-4 single-midline
+  output byte-for-byte; the existing vdiffr baselines are unchanged.
+
 ## Stage 3 — Schema object + column autodetection
 
 * New `event_log_schema()` constructor: a classed list bundling

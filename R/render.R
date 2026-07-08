@@ -19,6 +19,7 @@ render_journey_plot <- function(boxes, events, opts) {
   reference_lines  <- opts$reference_lines
   event_type_top_n <- opts$event_type_top_n
   spell_open       <- opts$spell_open %||% FALSE
+  lanes_active     <- opts$lanes_active %||% FALSE
   location_palette <- opts$location_palette
   event_palette    <- opts$event_palette
   palette_style    <- opts$palette_style
@@ -49,6 +50,13 @@ render_journey_plot <- function(boxes, events, opts) {
   if (!is.null(event_type_top_n) && n_events > 0) {
     events$act_type <- bucket_top_n(events$act_type, event_type_top_n)
   }
+
+  # Swimlanes: when active, point events already carry their per-lane y from
+  # derive_point_events(); otherwise every event is drawn on the box midline.
+  # Both the point layer and the ggrepel label layer draw from this one table
+  # so labels attach to the same coordinates as the points.
+  show_lane_axis <- lanes_active && n_events > 0 && "lane" %in% names(events)
+  event_points   <- if (lanes_active) events else dplyr::mutate(events, y = midline_y)
 
   # Split terminal markers (zero-duration end states, e.g. "Discharged") from
   # true stays — terminals render as a vertical marker, never as a box.
@@ -230,7 +238,7 @@ render_journey_plot <- function(boxes, events, opts) {
   if (nrow(events) > 0) {
     p <- p +
       ggplot2::geom_point(
-        data = dplyr::mutate(events, y = midline_y),
+        data = event_points,
         ggplot2::aes(
           x      = x,
           y      = y,
@@ -255,7 +263,7 @@ render_journey_plot <- function(boxes, events, opts) {
   if (labels_will_render) {
     p <- p +
       ggrepel::geom_text_repel(
-        data = dplyr::mutate(events, y = midline_y),
+        data = event_points,
         ggplot2::aes(x = x, y = y, label = activity),
         size          = 2.8,
         direction     = "y",
@@ -277,15 +285,30 @@ render_journey_plot <- function(boxes, events, opts) {
   # Instead, expand the lower range only when labels are actually rendered.
   y_expand_lower <- if (labels_will_render) 1.2 else 0.05
 
+  # With swimlanes active the y-axis carries meaning: label each lane at its
+  # band centre. Without lanes the axis stays unlabelled (single timeline).
+  if (show_lane_axis) {
+    lane_axis <- events |>
+      dplyr::distinct(lane, y) |>
+      dplyr::arrange(y)
+    y_scale <- ggplot2::scale_y_continuous(
+      breaks = lane_axis$y,
+      labels = as.character(lane_axis$lane),
+      expand = ggplot2::expansion(mult = c(y_expand_lower, 0.15))
+    )
+  } else {
+    y_scale <- ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = c(y_expand_lower, 0.15))
+    )
+  }
+
   p <- p +
     ggplot2::scale_x_datetime(
       date_breaks = date_breaks,
       date_labels = date_labels,
       expand      = ggplot2::expansion(mult = 0.02)
     ) +
-    ggplot2::scale_y_continuous(
-      expand = ggplot2::expansion(mult = c(y_expand_lower, 0.15))
-    ) +
+    y_scale +
     ggplot2::scale_fill_manual(
       values = loc_colours,
       name   = "Location"
@@ -312,13 +335,27 @@ render_journey_plot <- function(boxes, events, opts) {
   }
 
   # ── Theme ─────────────────────────────────────────────────────────────────
+  # Swimlanes turn the y-axis into a meaningful lane index, so its text/ticks
+  # become visible only then; a single-lane timeline keeps them blank.
+  axis_text_y  <- if (show_lane_axis) {
+    ggplot2::element_text(size = 8, colour = "grey30")
+  } else {
+    ggplot2::element_blank()
+  }
+  axis_ticks_y <- if (show_lane_axis) {
+    ggplot2::element_line(colour = "grey80", linewidth = 0.3)
+  } else {
+    ggplot2::element_blank()
+  }
+
   p <- p +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(
-      # y-axis carries no meaningful information in a single-lane timeline
+      # y-axis carries no meaningful information in a single-lane timeline,
+      # but names each lane when swimlanes are active
       axis.title.y  = ggplot2::element_blank(),
-      axis.text.y   = ggplot2::element_blank(),
-      axis.ticks.y  = ggplot2::element_blank(),
+      axis.text.y   = axis_text_y,
+      axis.ticks.y  = axis_ticks_y,
       # Keep only vertical gridlines for time reference; horizontal are noise
       panel.grid.major.y = ggplot2::element_blank(),
       panel.grid.minor.y = ggplot2::element_blank(),
