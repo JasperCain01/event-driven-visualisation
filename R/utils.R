@@ -181,6 +181,20 @@ format_duration <- function(secs) {
 }
 
 
+# ── Instant formatting (interactive tooltips) ──────────────────────────────────
+
+# Format a single x-position for a tooltip, honouring x_scale: a POSIXct
+# instant in datetime mode, or "+Nh" in elapsed-hours (cohort) mode. Kept
+# separate from format_duration(), which formats an interval, not a point.
+.format_instant <- function(x, x_scale = "datetime") {
+  if (x_scale == "datetime") {
+    format(x, "%Y-%m-%d %H:%M")
+  } else {
+    paste0("+", round(x, 1), "h")
+  }
+}
+
+
 # ── reference_lines validation ─────────────────────────────────────────────────
 
 # Validate the shape of the `reference_lines` argument to plot_patient_journey():

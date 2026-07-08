@@ -13,6 +13,11 @@
 #
 # Because all data shaping is done upstream, swapping this for a plotly/ggiraph
 # renderer is a matter of writing a sibling assembler consuming journey_layers().
+# Stage 7 does exactly this: render_journey_plot_interactive() in
+# render_interactive.R reuses render_journey_plot() verbatim, with
+# opts$interactive = TRUE switching journey_layers() to emit ggiraph's
+# tooltip-bearing geoms (boxes, terminal markers, event points) in place of
+# their static equivalents.
 
 
 # ── journey_layers ────────────────────────────────────────────────────────────
@@ -45,6 +50,7 @@ journey_layers <- function(boxes, events, opts) {
   box_height       <- opts$box_height
   box_gap_prop     <- opts$box_gap_prop
   x_scale          <- opts$x_scale %||% "datetime"
+  interactive      <- opts$interactive %||% FALSE
 
   # ── Derived layout values ──────────────────────────────────────────────────
   # total_span is in the x columns' native units: seconds for datetime input
@@ -123,21 +129,56 @@ journey_layers <- function(boxes, events, opts) {
   # Uses xmax_render (= xmax minus a small gap proportion) so adjacent boxes
   # are visually separated. The gap is purely cosmetic — stored xmax/duration
   # values reflect the true clinical interval.
-  layers <- c(layers, list(
-    ggplot2::geom_rect(
-      data = boxes,
-      ggplot2::aes(
-        xmin  = xmin_render,
-        xmax  = xmax_render,
-        ymin  = ymin,
-        ymax  = ymax,
-        fill  = location
-      ),
-      colour    = NA,    # no border needed — gap between boxes provides separation
-      linewidth = 0,
-      alpha     = 0.85
+  #
+  # Interactive mode (Stage 7) swaps in ggiraph's geom_rect_interactive() with
+  # a tooltip built from the TRUE (unrendered) xmin/xmax so a nudged/staggered
+  # box's tooltip never overclaims — it must not overclaim an imputed end any
+  # more than the show_duration label may.
+  if (interactive) {
+    box_tooltips <- dplyr::mutate(
+      boxes,
+      tooltip = paste0(
+        location, "\n",
+        format_duration(as.numeric(duration, units = "secs")),
+        ifelse(end_inferred, " (end inferred)", ""), "\n",
+        "Entry: ", .format_instant(xmin, x_scale), "\n",
+        "Exit: ",  .format_instant(xmax, x_scale),
+        ifelse(end_inferred, " (inferred)", "")
+      )
     )
-  ))
+    layers <- c(layers, list(
+      ggiraph::geom_rect_interactive(
+        data = box_tooltips,
+        ggplot2::aes(
+          xmin    = xmin_render,
+          xmax    = xmax_render,
+          ymin    = ymin,
+          ymax    = ymax,
+          fill    = location,
+          tooltip = tooltip
+        ),
+        colour    = NA,
+        linewidth = 0,
+        alpha     = 0.85
+      )
+    ))
+  } else {
+    layers <- c(layers, list(
+      ggplot2::geom_rect(
+        data = boxes,
+        ggplot2::aes(
+          xmin  = xmin_render,
+          xmax  = xmax_render,
+          ymin  = ymin,
+          ymax  = ymax,
+          fill  = location
+        ),
+        colour    = NA,    # no border needed — gap between boxes provides separation
+        linewidth = 0,
+        alpha     = 0.85
+      )
+    ))
+  }
 
   # ── Layer 1a: duration labels ─────────────────────────────────────────────
   # Reserved y-range [box_height, 1.12*box_height] per the layout budget —
@@ -252,40 +293,88 @@ journey_layers <- function(boxes, events, opts) {
   # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
   # bar at its timestamp with a direct label, outside the fill legend.
   if (nrow(term_boxes) > 0) {
-    layers <- c(layers, list(
-      ggplot2::geom_segment(
-        data = term_boxes,
-        ggplot2::aes(x = xmin, xend = xmin, y = ymin, yend = ymax),
-        colour    = "grey25",
-        linewidth = 1.1
-      ),
-      ggplot2::geom_text(
-        data = term_boxes,
-        ggplot2::aes(x = xmin, y = ymax, label = location),
-        hjust    = 1.1,
-        vjust    = -0.6,
-        size     = 3,
-        fontface = "italic",
-        colour   = "grey25"
+    if (interactive) {
+      term_tooltips <- dplyr::mutate(
+        term_boxes,
+        tooltip = paste0(location, "\nAt: ", .format_instant(xmin, x_scale))
       )
-    ))
+      layers <- c(layers, list(
+        ggiraph::geom_segment_interactive(
+          data = term_tooltips,
+          ggplot2::aes(x = xmin, xend = xmin, y = ymin, yend = ymax, tooltip = tooltip),
+          colour    = "grey25",
+          linewidth = 1.1
+        ),
+        ggiraph::geom_text_interactive(
+          data = term_tooltips,
+          ggplot2::aes(x = xmin, y = ymax, label = location, tooltip = tooltip),
+          hjust    = 1.1,
+          vjust    = -0.6,
+          size     = 3,
+          fontface = "italic",
+          colour   = "grey25"
+        )
+      ))
+    } else {
+      layers <- c(layers, list(
+        ggplot2::geom_segment(
+          data = term_boxes,
+          ggplot2::aes(x = xmin, xend = xmin, y = ymin, yend = ymax),
+          colour    = "grey25",
+          linewidth = 1.1
+        ),
+        ggplot2::geom_text(
+          data = term_boxes,
+          ggplot2::aes(x = xmin, y = ymax, label = location),
+          hjust    = 1.1,
+          vjust    = -0.6,
+          size     = 3,
+          fontface = "italic",
+          colour   = "grey25"
+        )
+      ))
+    }
   }
 
   # ── Layer 3: instantaneous event points ──────────────────────────────────
+  # Interactive mode gives every point (whether on the single midline or
+  # stacked into swimlanes) a tooltip — the swimlane points get tooltips too,
+  # per Stage 7.
   if (nrow(events) > 0) {
-    layers <- c(layers, list(
-      ggplot2::geom_point(
-        data = event_points,
-        ggplot2::aes(
-          x      = x,
-          y      = y,
-          colour = act_type,
-          shape  = act_type
-        ),
-        size   = 3,
-        stroke = 0.8
+    if (interactive) {
+      event_tooltips <- dplyr::mutate(
+        event_points,
+        tooltip = paste0(activity, "\n", act_type, "\n", .format_instant(x, x_scale))
       )
-    ))
+      layers <- c(layers, list(
+        ggiraph::geom_point_interactive(
+          data = event_tooltips,
+          ggplot2::aes(
+            x       = x,
+            y       = y,
+            colour  = act_type,
+            shape   = act_type,
+            tooltip = tooltip
+          ),
+          size   = 3,
+          stroke = 0.8
+        )
+      ))
+    } else {
+      layers <- c(layers, list(
+        ggplot2::geom_point(
+          data = event_points,
+          ggplot2::aes(
+            x      = x,
+            y      = y,
+            colour = act_type,
+            shape  = act_type
+          ),
+          size   = 3,
+          stroke = 0.8
+        )
+      ))
+    }
   }
 
   # ── Layer 4: optional event labels via ggrepel ────────────────────────────
@@ -458,18 +547,13 @@ render_journey_plot <- function(boxes, events, opts) {
   }
 
   p <- p +
-    ggplot2::theme_minimal(base_size = 11) +
+    theme_journey(base_size = 11) +
     ggplot2::theme(
       # y-axis carries no meaningful information in a single-lane timeline,
       # but names each lane when swimlanes are active
       axis.title.y  = ggplot2::element_blank(),
       axis.text.y   = axis_text_y,
       axis.ticks.y  = axis_ticks_y,
-      # Keep only vertical gridlines for time reference; horizontal are noise
-      panel.grid.major.y = ggplot2::element_blank(),
-      panel.grid.minor.y = ggplot2::element_blank(),
-      panel.grid.minor.x = ggplot2::element_blank(),
-      panel.grid.major.x = ggplot2::element_line(colour = "grey88", linewidth = 0.4),
       # Legends — stacked vertically: two side-by-side legends overflow the
       # plot width at realistic category counts, clipping titles and entries
       legend.position  = "bottom",
@@ -478,8 +562,6 @@ render_journey_plot <- function(boxes, events, opts) {
       legend.box.margin = ggplot2::margin(0, 0, 0, 0),
       legend.title     = ggplot2::element_text(size = 9, face = "bold"),
       legend.text      = ggplot2::element_text(size = 8),
-      # Title
-      plot.title       = ggplot2::element_text(size = 12, face = "bold", hjust = 0),
       plot.subtitle    = ggplot2::element_text(size = 9,  colour = "grey40"),
       # Extra breathing room at the bottom for ggrepel labels
       plot.margin      = ggplot2::margin(8, 12, 8, 8)

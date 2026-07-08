@@ -255,16 +255,11 @@ plot_stage_ladder <- function(
       expand = ggplot2::expansion(mult = c(0.08, 0.12))
     ) +
     ggplot2::scale_colour_manual(values = stage_colours, guide = "none") +
-    ggplot2::theme_minimal(base_size = 11) +
+    theme_journey(base_size = 11) +
     ggplot2::theme(
-      axis.title.y       = ggplot2::element_blank(),
-      axis.text.y        = ggplot2::element_text(size = 9, colour = "grey20"),
-      panel.grid.major.y = ggplot2::element_blank(),
-      panel.grid.minor.y = ggplot2::element_blank(),
-      panel.grid.minor.x = ggplot2::element_blank(),
-      panel.grid.major.x = ggplot2::element_line(colour = "grey88", linewidth = 0.4),
-      plot.title         = ggplot2::element_text(size = 12, face = "bold", hjust = 0),
-      plot.margin        = ggplot2::margin(8, 14, 8, 8)
+      axis.title.y = ggplot2::element_blank(),
+      axis.text.y  = ggplot2::element_text(size = 9, colour = "grey20"),
+      plot.margin  = ggplot2::margin(8, 14, 8, 8)
     ) +
     ggplot2::labs(title = title, x = NULL)
 

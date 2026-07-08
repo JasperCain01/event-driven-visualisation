@@ -8,9 +8,17 @@
 #   5. Delegates to render_journey_plot()
 #   6. Returns the ggplot object (or list when return_data = TRUE)
 #
+# Despite the name (kept for backward compatibility — see locked decision 5),
+# this renders any event log built from exclusive states over time, not just
+# clinical spells: a "location" is any state a case occupies exclusively for
+# an interval — a ward, a complaint stage, a ticket status, a pipeline step —
+# and location_categories/state_label exist precisely so callers can point
+# this at complaint_example or support_ticket_example as readily as a
+# patient spell.
+#
 # Source all files in R/ to use:
 #   source("R/utils.R"); source("R/validate.R"); source("R/schema.R")
-#   source("R/transform.R"); source("R/render.R")
+#   source("R/transform.R"); source("R/render.R"); source("R/render_interactive.R")
 #   source("R/plot_patient_journey.R")
 
 
@@ -20,7 +28,9 @@ plot_patient_journey <- function(
     # Which spell to visualise
     case_id,
 
-    # Which act_type values represent physical location moves (create boxes)
+    # Which act_type values represent a move to a new exclusive state (create
+    # boxes) — a physical location for a patient spell, but equally a stage
+    # move for a complaint or a status change for a support ticket.
     location_categories = c("location_move", "ed_location_move"),
 
     # Column name mappings — change these if your data uses different names.
@@ -113,9 +123,23 @@ plot_patient_journey <- function(
     # "last_event" → extend to last event; falls back to "median" then "fixed"
     tail_strategy = "last_event",
 
+    # Render as an interactive ggiraph girafe widget instead of a static
+    # ggplot. Box, terminal-marker, and event-point layers gain tooltips
+    # (location/duration/entry-exit for boxes, with an "(end inferred)" flag
+    # so a tooltip never overclaims an imputed end). Requires the ggiraph
+    # package (Suggests only).
+    interactive = FALSE,
+
     # Set TRUE to return list(plot, boxes, events) for debugging or extension
     return_data = FALSE
 ) {
+
+  if (interactive && !requireNamespace("ggiraph", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg ggiraph} is required for {.arg interactive = TRUE}.",
+      "i" = "Install it with {.code install.packages(\"ggiraph\")}."
+    ))
+  }
 
   # ── Resolve schema, if any, before touching the column-mapping args ───────
   # missing(x) reflects whether the *caller* supplied x, independent of x's
@@ -252,11 +276,16 @@ plot_patient_journey <- function(
     x_scale          = "datetime",
     facet_by         = NULL,
     spell_open       = attr(boxes, "spell_open") %||% FALSE,
-    lanes_active     = !is.null(lane_col)
+    lanes_active     = !is.null(lane_col),
+    interactive      = interactive
   )
 
   # ── Render ────────────────────────────────────────────────────────────────
-  p <- render_journey_plot(boxes, events, opts)
+  p <- if (interactive) {
+    render_journey_plot_interactive(boxes, events, opts)
+  } else {
+    render_journey_plot(boxes, events, opts)
+  }
 
   # ── Return ────────────────────────────────────────────────────────────────
   # return_data additionally carries a per-stay duration summary (Stage 6d),

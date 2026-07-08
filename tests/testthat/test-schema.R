@@ -12,6 +12,7 @@ source("../../R/validate.R")
 source("../../R/schema.R")
 source("../../R/transform.R")
 source("../../R/render.R")
+source("../../R/theme.R")
 source("../../R/plot_patient_journey.R")
 source("../../R/example_data.R")   # provides `example_journey`
 
