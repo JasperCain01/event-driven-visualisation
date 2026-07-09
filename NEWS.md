@@ -6,6 +6,39 @@ timelines, staircase stage diagrams for location-less linear processes,
 cohort facets, aggregate/statistical summaries, an interactive renderer, and
 three example datasets spanning healthcare, complaints, and support tickets.
 
+## Post-implementation review fixes
+
+Four defects found in an executed review of the completed stages, plus
+packaging-layout corrections:
+
+* `plot_journey_cohort()` (absolute-time mode) now sizes the cosmetic
+  inter-box gap — and each box's minimum render width — against each facet
+  panel's own time span instead of the whole cohort's calendar span.
+  Previously, a cohort whose cases were months apart rendered every box at
+  many times its true width. Axis-break selection likewise now sees the
+  widest single panel, giving per-panel time labels instead of one break
+  sized for the whole calendar range. The `cohort-absolute` vdiffr baseline
+  was re-rendered and visually re-approved for this change.
+* `plot_journey_cohort()` with `event_type_top_n`: the `"Other"` bucket now
+  receives a colour from the event palette. Previously the cohort palette
+  was built over the raw (unbucketed) event types, so `"Other"` silently
+  fell back to the grey `na.value`.
+* `plot_journey_with_summary()` now derives the bar-chart colours from the
+  exact fill levels the timeline used (including any synthetic
+  `"(pre-admission)"` box) and honours `palette_style`/`location_palette`
+  passed through `...`. Previously the bars rebuilt their palette over a
+  different level set, shifting every hue by one position whenever the two
+  differed.
+* `plot_stage_ladder()` `stage_targets` now bands **every** visit to a
+  stage a case re-enters, and draws the firebrick breach excess per visit.
+  Previously only the first visit was banded and checked.
+* Packaging: the three example datasets moved to `data/` as lazy-loaded
+  `.rda` files built by `data-raw/` scripts (documented in `R/data.R`), as
+  the implementation plan's Stage 0 specified; `LICENSE` now uses CRAN's
+  two-line form with the full text in `LICENSE.md`; `.Rbuildignore`
+  patterns are anchored; `DESCRIPTION` declares `ggplot2 (>= 3.4.0)`
+  (needed for `scale_linewidth_continuous()`) and `R (>= 3.5)`.
+
 ## Stage 10 — Documentation & packaging polish
 
 * Added a `pkgdown` site (`_pkgdown.yml` + a `pkgdown.yaml` GitHub Actions

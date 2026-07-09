@@ -182,7 +182,7 @@ derive_point_events <- function(data, boxes, cols, location_categories,
   }
 
   if (nrow(point_data) == 0) {
-    empty <- dplyr::tibble(
+    empty <- tibble::tibble(
       act_type  = character(),
       activity  = character(),
       timestamp = as.POSIXct(character()),
@@ -335,7 +335,7 @@ build_journey_tables <- function(data, cols, location_categories,
   b <- boxes
   if ("box_id" %in% names(b)) b <- b[b$box_id != 0, , drop = FALSE]
 
-  dplyr::tibble(
+  tibble::tibble(
     case_id       = case_id,
     location      = b$location,
     xmin          = b$xmin,

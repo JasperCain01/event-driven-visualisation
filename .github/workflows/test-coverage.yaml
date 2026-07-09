@@ -27,16 +27,13 @@ jobs:
         run: |
           # R/eventviz-package.R holds only package-level roxygen tags and a
           # globalVariables() declaration - no executable logic to cover.
-          # R/example_data.R's make_*() functions build the example/complaint/
-          # ticket datasets at package load time, before covr's tracer
-          # attaches; they're exercised on every test run (virtually every
-          # test consumes example_journey/complaint_example/
-          # support_ticket_example) but show as 0% for that reason, a known
-          # covr limitation with load-time code rather than a real gap.
+          # (The example datasets live in data/ as lazy-loaded .rda files
+          # built by the data-raw/ scripts, so they carry no load-time code
+          # for covr to trace.)
           cov <- covr::package_coverage(
             quiet = FALSE,
             clobber = FALSE,
-            line_exclusions = list("R/eventviz-package.R", "R/example_data.R")
+            line_exclusions = list("R/eventviz-package.R")
           )
           covr::to_cobertura(cov)
         shell: Rscript {0}
