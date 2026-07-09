@@ -1,0 +1,36 @@
+# A synthetic support-ticket event log
+
+Stage 8's third example dataset: it proves the package leaves the
+healthcare/NHS sector entirely (\`complaint_example\` is still
+NHS-adjacent). Six support tickets moving through the fixed statuses
+Open -\> Assigned -\> In Progress -\> Waiting on Customer -\> Resolved
+-\> Closed, recorded as \`act_type = "status_change"\`. Sprinkled point
+events (\`comment_added\`, \`priority_changed\`, \`reassigned\`,
+\`sla_warning\`) exercise the instantaneous-event path. There is
+deliberately no patient column, mirroring \`complaint_example\`.
+\`"TCK-03"\` stalls for days in "Waiting on Customer" (a per-stage
+breach) and \`"TCK-04"\` is still open, exercising the ongoing-spell
+indication.
+
+## Usage
+
+``` r
+support_ticket_example
+```
+
+## Format
+
+A tibble with columns \`ticket_id\`, \`timestamp\`, \`act_type\`,
+\`activity\`.
+
+## Examples
+
+``` r
+plot_patient_journey(
+  support_ticket_example, case_id = "TCK-01",
+  location_categories = "status_change", case_col = "ticket_id",
+  patient_col = NULL, terminal_activities = "Closed",
+  state_label = "Status"
+)
+
+```
