@@ -63,8 +63,12 @@
 #'   mappings, as in [plot_patient_journey()].
 #' @param tz Timezone used when parsing character timestamps.
 #' @param terminal_activities Character vector of terminal `activity` values.
+#'   A case whose spell never reaches one renders with the `(ongoing)`
+#'   open-spell marker in its own panel.
 #' @param exclude_categories Character vector of `act_type` values to drop
 #'   before plotting, or `NULL`.
+#' @param tail_strategy Strategy for inferring each case's final box end
+#'   time, as in [plot_patient_journey()].
 #' @param align_start Logical. `FALSE` (default) compares cases on absolute
 #'   time (free per-panel x range); `TRUE` rebases each case to its first
 #'   move and compares them on one shared elapsed-hours axis.
@@ -100,6 +104,7 @@ plot_journey_cohort <- function(
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
+    tail_strategy       = "last_event",
 
     # Cohort layout
     align_start = FALSE,
@@ -171,6 +176,7 @@ plot_journey_cohort <- function(
 
   boxes_list  <- vector("list", length(case_ids))
   events_list <- vector("list", length(case_ids))
+  open_cases  <- character(0)   # cases whose spell never reached a terminal
 
   for (i in seq_along(case_ids)) {
     cid <- case_ids[[i]]
@@ -190,9 +196,14 @@ plot_journey_cohort <- function(
 
     tables <- build_journey_tables(spell, cols, location_categories,
                                    box_height          = box_height,
+                                   tail_strategy       = tail_strategy,
                                    terminal_activities = terminal_activities)
     boxes_c  <- tables$boxes
     events_c <- tables$events
+
+    if (isTRUE(attr(boxes_c, "spell_open"))) {
+      open_cases <- c(open_cases, as.character(cid))
+    }
 
     if (align_start) {
       rebased  <- .rebase_to_elapsed_hours(boxes_c, events_c)
@@ -219,8 +230,16 @@ plot_journey_cohort <- function(
                                         palette_style)
   }
   if (is.null(event_palette) && nrow(events_all) > 0) {
-    event_palette <- journey_palette(unique(events_all$act_type), "event",
-                                     palette_style)
+    # The palette must cover what journey_layers() will actually draw: with
+    # event_type_top_n set, the long tail is bucketed to "Other" at render
+    # time, and a palette built over the raw levels left "Other" falling
+    # back to the silent na.value grey. Bucket here the same way (message
+    # suppressed — journey_layers() informs once when it buckets for real).
+    evt_vals <- events_all$act_type
+    if (!is.null(event_type_top_n)) {
+      evt_vals <- suppressMessages(bucket_top_n(evt_vals, event_type_top_n))
+    }
+    event_palette <- journey_palette(unique(evt_vals), "event", palette_style)
   }
 
   if (is.null(title)) {
@@ -247,7 +266,8 @@ plot_journey_cohort <- function(
     facet_by         = "case_id",
     facet_scales     = if (align_start) "fixed" else "free_x",
     ncol             = ncol,
-    spell_open       = FALSE,   # per-case open-spell markers are Stage 6/v2
+    spell_open       = FALSE,        # single-case flag; cohort uses open_cases
+    open_cases       = open_cases,   # per-case markers, one per open panel
     lanes_active     = FALSE
   )
 

@@ -16,6 +16,7 @@ plot_journey_cohort(
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
+  tail_strategy = "last_event",
   align_start = FALSE,
   ncol = NULL,
   max_cases = 25L,
@@ -47,10 +48,15 @@ mappings, as in [plot_patient_journey()].}
 
 \item{tz}{Timezone used when parsing character timestamps.}
 
-\item{terminal_activities}{Character vector of terminal `activity` values.}
+\item{terminal_activities}{Character vector of terminal `activity` values.
+A case whose spell never reaches one renders with the `(ongoing)`
+open-spell marker in its own panel.}
 
 \item{exclude_categories}{Character vector of `act_type` values to drop
 before plotting, or `NULL`.}
+
+\item{tail_strategy}{Strategy for inferring each case's final box end
+time, as in \code{\link[=plot_patient_journey]{plot_patient_journey()}}.}
 
 \item{align_start}{Logical. `FALSE` (default) compares cases on absolute
 time (free per-panel x range); `TRUE` rebases each case to its first

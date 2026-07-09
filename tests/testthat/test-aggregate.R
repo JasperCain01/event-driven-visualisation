@@ -269,3 +269,40 @@ test_that("plot_journey_with_summary assembles a patchwork that builds", {
   expect_s3_class(pj, "patchwork")
   expect_no_error(patchwork::patchworkGrob(pj))
 })
+
+# ── Regression: summary bars reuse the timeline's exact fill palette ─────────────
+
+test_that("summary bar colours match the timeline's fills even with a pre-admission box", {
+  skip_if_not_installed("patchwork")
+  # The pre-admission event gives the timeline a "(pre-admission)" fill level
+  # the summary drops, which used to shift every bar hue by one position.
+  log <- tibble::tibble(
+    caseID    = "S1",
+    timestamp = hrs(c(-1, 0, 1, 2, 3)),
+    act_type  = c("obs", "location_move", "obs", "location_move", "obs"),
+    activity  = c("pre call", "A", "mid", "B", "post")
+  )
+  pw <- suppressMessages(plot_journey_with_summary(
+    log, case_id = "S1", location_categories = "location_move",
+    case_col = "caseID", patient_col = NULL
+  ))
+  timeline <- pw[[1]]
+  bars     <- pw[[2]]
+
+  tld <- timeline$layers[[1]]$data                       # includes (pre-admission)
+  tlb <- ggplot2::ggplot_build(timeline)$data[[1]]
+  tl_fill <- stats::setNames(
+    tlb$fill[match(as.numeric(tld$xmin_render), tlb$xmin)],
+    tld$location
+  )
+
+  bar_built <- ggplot2::ggplot_build(bars)$data[[1]]
+  bar_locs  <- levels(bars$data$location)
+  bar_fill  <- stats::setNames(bar_built$fill[order(bar_built$x)], bar_locs)
+
+  shared <- intersect(names(tl_fill), names(bar_fill))
+  expect_setequal(shared, c("A", "B"))
+  for (loc in shared) {
+    expect_equal(unname(bar_fill[[loc]]), unname(tl_fill[[loc]]))
+  }
+})

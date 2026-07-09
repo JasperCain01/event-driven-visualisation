@@ -46,8 +46,12 @@ mappings, as in [plot_patient_journey()].}
 
 \item{stage_targets}{Named numeric vector mapping a stage name to its
 allowed dwell in hours, rendered as a light band from stage entry to
-entry + target; dwell beyond it is drawn in firebrick. `NULL` = no
-targets shown.}
+entry + target; dwell beyond it is drawn in firebrick. When a case
+revisits a stage, every visit is banded against the same target
+(\code{\link[=summarise_breach_rate]{summarise_breach_rate()}} instead sums a case's visits into one total
+dwell). An open (end-inferred) stage draws only its \emph{proven} excess ---
+dwell observed up to the last recorded event, never the imputed end.
+`NULL` = no targets shown.}
 
 \item{show_duration}{Logical; show a formatted duration label at each
 segment's midpoint.}

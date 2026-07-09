@@ -1,9 +1,9 @@
-IMPLEMENTATION_PLAN.md
-
-data-raw/
-.github/
+^IMPLEMENTATION_PLAN\.md$
+^data-raw$
+^\.github$
 ^_pkgdown\.yml$
 ^pkgdown$
 ^codecov\.yml$
 ^README\.Rmd$
 ^\.Rproj\.user$
+^LICENSE\.md$

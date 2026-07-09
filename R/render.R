@@ -53,17 +53,41 @@ journey_layers <- function(boxes, events, opts) {
   interactive      <- opts$interactive %||% FALSE
 
   # ── Derived layout values ──────────────────────────────────────────────────
-  # total_span is in the x columns' native units: seconds for datetime input
+  # Spans are in the x columns' native units: seconds for datetime input
   # (difftime), hours for elapsed-hours input (plain numeric subtraction). Every
   # downstream width/gap computation stays in those same units, so both modes
   # share one arithmetic path.
-  if (x_scale == "datetime") {
-    total_span <- as.numeric(
-      difftime(max(boxes$xmax), min(boxes$xmin), units = "secs")
-    )
-  } else {
-    total_span <- max(boxes$xmax) - min(boxes$xmin)
+  span_in_x_units <- function(xmin, xmax) {
+    if (x_scale == "datetime") {
+      as.numeric(difftime(max(xmax), min(xmin), units = "secs"))
+    } else {
+      max(xmax) - min(xmin)
+    }
   }
+
+  # With free per-panel x-axes (an absolute-time cohort), the visual gap must
+  # be sized against each panel's own span: sizing it against the whole
+  # cohort's calendar span rendered every box of a months-apart cohort at many
+  # times its true width, because each facet panel's axis only covers its own
+  # case. Fixed/shared axes (single case, start-aligned cohort) keep one
+  # global span — there the whole plot is a single panel-width.
+  facet_by  <- opts$facet_by
+  per_panel <- !is.null(facet_by) && facet_by %in% names(boxes) &&
+    identical(opts$facet_scales %||% "free_x", "free_x")
+
+  if (per_panel) {
+    boxes <- boxes |>
+      dplyr::group_by(.data[[facet_by]]) |>
+      dplyr::mutate(.gap_span = span_in_x_units(xmin, xmax)) |>
+      dplyr::ungroup()
+  } else {
+    boxes <- dplyr::mutate(boxes, .gap_span = span_in_x_units(xmin, xmax))
+  }
+
+  # Axis-break selection sees the widest single panel, not the sum of panel
+  # spans plus the calendar dead time between cases. Without faceting this is
+  # exactly the whole-journey span, as before.
+  total_span <- max(boxes$.gap_span)
   # Anchor for reference_lines' offset_hours: the spell's first event. When a
   # synthetic pre-admission box exists it already carries the earliest event
   # timestamp, so min(boxes$xmin) covers both cases.
@@ -92,21 +116,25 @@ journey_layers <- function(boxes, events, opts) {
   # Split terminal markers (zero-duration end states, e.g. "Discharged") from
   # true stays — terminals render as a vertical marker, never as a box.
   term_boxes <- dplyr::filter(boxes, terminal)
+  term_boxes$.gap_span <- NULL   # render-only helper; keep layer data clean
   boxes      <- dplyr::filter(boxes, !terminal)
 
   # Shrink each box's rendered xmax by a fixed amount so all gaps are the same
-  # absolute width on screen. The gap is expressed as a proportion of the TOTAL
-  # journey span (not each box's own width), ensuring consistency regardless of
-  # how long individual stays are. Guard with pmax so a very short box can never
-  # render with negative width. xmin_render (not xmin) is the base: it staggers
-  # boxes whose predecessor was nudged over them after a shared timestamp.
-  gap_secs <- total_span * box_gap_prop
+  # absolute width on screen. The gap is expressed as a proportion of the
+  # box's own PANEL span (not each box's own width), ensuring consistency
+  # regardless of how long individual stays are. Guard with pmax so a very
+  # short box can never render with negative width. xmin_render (not xmin) is
+  # the base: it staggers boxes whose predecessor was nudged over them after a
+  # shared timestamp.
   boxes <- dplyr::mutate(
     boxes,
+    .gap = .gap_span * box_gap_prop,
     xmax_render = xmin_render + pmax(
-      as.numeric(xmax - xmin_render, units = "secs") - gap_secs,
-      gap_secs   # minimum render width = one gap unit
-    )
+      as.numeric(xmax - xmin_render, units = "secs") - .gap,
+      .gap   # minimum render width = one gap unit
+    ),
+    .gap_span = NULL,
+    .gap      = NULL
   )
 
   # ── Colour scales ──────────────────────────────────────────────────────────
@@ -232,8 +260,25 @@ journey_layers <- function(boxes, events, opts) {
   # final box's right edge as open-ended rather than implying its (inferred)
   # xmax is a known, true end. Data-driven (not annotate()) so it faces the
   # correct panel when faceted.
-  if (spell_open && nrow(boxes) > 0) {
+  #
+  # Single-case: opts$spell_open flags the one spell. Cohort: opts$open_cases
+  # lists the case ids whose spell never reached a terminal state, and each
+  # open case's final box gets the marker in its own facet panel.
+  open_cases <- opts$open_cases
+  if (!is.null(facet_by) && facet_by %in% names(boxes) &&
+      length(open_cases) > 0) {
+    final_box <- boxes |>
+      dplyr::filter(.data[[facet_by]] %in% open_cases) |>
+      dplyr::group_by(.data[[facet_by]]) |>
+      dplyr::slice_tail(n = 1) |>
+      dplyr::ungroup()
+  } else if (spell_open && nrow(boxes) > 0) {
     final_box <- dplyr::slice_tail(boxes, n = 1)
+  } else {
+    final_box <- NULL
+  }
+
+  if (!is.null(final_box) && nrow(final_box) > 0) {
     ongoing_label <- dplyr::mutate(final_box, y = box_height * 1.04)
 
     layers <- c(layers, list(
