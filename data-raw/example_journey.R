@@ -1,13 +1,11 @@
-# example_data.R — Synthetic patient journey dataset
+# data-raw/example_journey.R — builds the `example_journey` dataset.
 #
-# Creates `example_journey`, a representative event log for a single patient
-# spell. The journey follows: Ambulance arrival → ED → Ward → Discharge Lounge
-# → Discharge. Mixed in are clinical events (obs, assessments, tests, dr visits)
-# to exercise the instantaneous-event rendering.
+# A representative event log for a single patient spell. The journey follows:
+# Ambulance arrival → ED → Ward → Discharge Lounge → Discharge. Mixed in are
+# clinical events (obs, assessments, tests, dr visits) to exercise the
+# instantaneous-event rendering.
 #
-# Usage:
-#   source("R/example_data.R")
-#   plot_patient_journey(example_journey, case_id = "SP-001")
+# Regenerate with: source("data-raw/example_journey.R")
 
 make_example_journey <- function() {
 
@@ -29,12 +27,12 @@ make_example_journey <- function() {
     "SP-001",  t(1.25),  "test_ordered",       "FBC, U&E, CRP, Troponin",
     "SP-001",  t(1.50),  "test_ordered",       "ECG",
     "SP-001",  t(1.75),  "obs",                "ECG completed",
-    "SP-001",  t(2.25),  "clerk_review",       "Dr review — query ACS",
+    "SP-001",  t(2.25),  "clerk_review",       "Dr review \u2014 query ACS",
     "SP-001",  t(2.50),  "test_ordered",       "Chest X-Ray",
     "SP-001",  t(3.00),  "obs",                "Repeat troponin",
     "SP-001",  t(3.50),  "clerk_review",       "Cardiology consult requested",
     "SP-001",  t(4.00),  "home_today_change",  "No",
-    "SP-001",  t(4.25),  "clerk_review",       "Decision to admit — AMU",
+    "SP-001",  t(4.25),  "clerk_review",       "Decision to admit \u2014 AMU",
 
     # ── Transfer to ward ─────────────────────────────────────────────────────
     "SP-001",  t(4.75),  "location_move",      "Acute Medical Unit",
@@ -43,13 +41,13 @@ make_example_journey <- function() {
     "SP-001",  t(6.00),  "test_ordered",       "Echo booked",
 
     # ── Overnight ward ───────────────────────────────────────────────────────
-    "SP-001",  t(10.0),  "obs",                "Evening obs — stable",
-    "SP-001",  t(14.0),  "obs",                "Night obs — stable",
+    "SP-001",  t(10.0),  "obs",                "Evening obs \u2014 stable",
+    "SP-001",  t(14.0),  "obs",                "Night obs \u2014 stable",
     "SP-001",  t(18.0),  "obs",                "Early morning obs",
     "SP-001",  t(20.0),  "clerk_review",       "Cardiology review",
     "SP-001",  t(21.0),  "test_ordered",       "Echo completed",
-    "SP-001",  t(22.0),  "clerk_review",       "Echo reviewed — mild LV impairment",
-    "SP-001",  t(24.0),  "obs",                "Midday obs — improving",
+    "SP-001",  t(22.0),  "clerk_review",       "Echo reviewed \u2014 mild LV impairment",
+    "SP-001",  t(24.0),  "obs",                "Midday obs \u2014 improving",
     "SP-001",  t(25.0),  "clerk_review",       "Consultant ward round",
     "SP-001",  t(26.0),  "home_today_change",  "Yes",
 
@@ -58,7 +56,7 @@ make_example_journey <- function() {
     "SP-001",  t(27.5),  "clerk_review",       "TTOs sent to pharmacy",
     "SP-001",  t(28.5),  "clerk_review",       "Discharge letter dictated",
     "SP-001",  t(29.0),  "obs",                "Final obs pre-discharge",
-    "SP-001",  t(30.0),  "clerk_review",       "Pharmacy — drugs dispensed",
+    "SP-001",  t(30.0),  "clerk_review",       "Pharmacy \u2014 drugs dispensed",
 
     # ── Discharge ────────────────────────────────────────────────────────────
     "SP-001",  t(30.5),  "location_move",      "Discharged"
@@ -67,3 +65,5 @@ make_example_journey <- function() {
 }
 
 example_journey <- make_example_journey()
+
+usethis::use_data(example_journey, overwrite = TRUE)

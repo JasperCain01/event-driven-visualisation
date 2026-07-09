@@ -49,7 +49,7 @@ derive_location_boxes <- function(data, cols, location_categories,
   if (n_boxes == 0) {
     cli::cli_abort(c(
       "No location events found when deriving boxes.",
-      "i" = "This should have been caught by validation — check that
+      "i" = "This should have been caught by validation \u2014 check that
              {.arg exclude_categories} did not remove all location events."
     ))
   }
@@ -64,6 +64,13 @@ derive_location_boxes <- function(data, cols, location_categories,
   # plot invents hours the case spent "Discharged".
   is_terminal <- !is.null(terminal_activities) &&
     move_events$location[n_boxes] %in% terminal_activities
+
+  # Converse of is_terminal: the caller told us what "done" looks like
+  # (terminal_activities), but this case's last recorded move isn't one of
+  # them — the data feed stopped before the spell reached a terminal state.
+  # terminal_activities = NULL means the caller made no such claim, so there
+  # is nothing to be "open" relative to: attribute stays FALSE, no visual change.
+  spell_open <- !is.null(terminal_activities) && !is_terminal
 
   if (is_terminal) {
     move_events$xmax[n_boxes] <- move_events$xmin[n_boxes]
@@ -121,6 +128,10 @@ derive_location_boxes <- function(data, cols, location_categories,
   # Apply y-band geometry (single spell → band_index = 0)
   move_events <- assign_y_bands(move_events, box_height = box_height)
 
+  # Set after assign_y_bands (a dplyr::mutate() call) so the attribute isn't
+  # attached before a transformation that could plausibly drop it.
+  attr(move_events, "spell_open") <- spell_open
+
   move_events
 }
 
@@ -130,29 +141,57 @@ derive_location_boxes <- function(data, cols, location_categories,
 # Assigns every non-location event to its enclosing location box using a
 # half-open interval rule: event belongs to the box where xmin <= t < xmax.
 # Uses findInterval() on the sorted xmin vector — O(n log n), no extra deps.
+#
+# Swimlanes (Stage 4): when cols$lane names a data column, point events are
+# stacked into horizontal lanes above the location band instead of sharing a
+# single midline. Lanes affect point events ONLY — the location boxes stay the
+# spine at [0, box_height]. Lane order is factor levels if the lane column is a
+# factor, else first-appearance order. Lane i (1-indexed) occupies the y-range
+#   [base + i*lane_gap + (i-1)*lane_height, base + i*lane_gap + i*lane_height]
+# with base = box_height * 1.3 (the layout-budget swimlane floor, sitting above
+# the duration- and reference-label rows). Each event is placed at its lane's
+# vertical centre. cols$lane = NULL (default) → every event keeps y = midline,
+# output byte-identical to the pre-Stage-4 baseline.
+#
+# Returns list(events = <tibble>, pre_box = <tibble or NULL>): when events
+# precede the first location move, a synthetic "(pre-admission)" box is
+# returned alongside the events rather than attached as an attribute, so the
+# caller doesn't depend on attributes surviving unrelated transformations.
 derive_point_events <- function(data, boxes, cols, location_categories,
-                                box_height = 1) {
+                                box_height  = 1,
+                                lane_height = box_height,
+                                lane_gap    = 0.05 * box_height) {
+
+  lane_col <- cols$lane  # NULL unless swimlanes requested
 
   # All rows that are NOT location moves
-  point_data <- data |>
-    dplyr::filter(!(.data[[cols$act_type]] %in% location_categories)) |>
+  point_rows <- data |>
+    dplyr::filter(!(.data[[cols$act_type]] %in% location_categories))
+
+  point_data <- point_rows |>
     dplyr::select(
       act_type    = dplyr::all_of(cols$act_type),
       activity    = dplyr::all_of(cols$activity),
       timestamp   = dplyr::all_of(cols$time)
     )
 
+  # Carry the raw lane values through untouched — they are resolved to lane
+  # indices/positions below, after the empty-input guard.
+  if (!is.null(lane_col)) {
+    point_data$lane <- point_rows[[lane_col]]
+  }
+
   if (nrow(point_data) == 0) {
-    return(
-      dplyr::tibble(
-        act_type  = character(),
-        activity  = character(),
-        timestamp = as.POSIXct(character()),
-        x         = as.POSIXct(character()),
-        y         = numeric(),
-        box_id    = integer()
-      )
+    empty <- tibble::tibble(
+      act_type  = character(),
+      activity  = character(),
+      timestamp = as.POSIXct(character()),
+      x         = as.POSIXct(character()),
+      y         = numeric(),
+      box_id    = integer()
     )
+    if (!is.null(lane_col)) empty$lane <- character()
+    return(list(events = empty, pre_box = NULL))
   }
 
   # findInterval(t, xmin_vec) returns the index of the largest xmin <= t.
@@ -167,6 +206,7 @@ derive_point_events <- function(data, boxes, cols, location_categories,
   # Separate pre-location events (idx == 0) from in-location events
   pre_loc_mask <- raw_idx == 0L
   n_pre        <- sum(pre_loc_mask)
+  pre_box      <- NULL
 
   if (n_pre > 0) {
     cli::cli_inform(c(
@@ -190,10 +230,6 @@ derive_point_events <- function(data, boxes, cols, location_categories,
     ) |>
       assign_y_bands(box_height = box_height)
 
-    # Prepend to boxes in the calling environment — returned via attribute so
-    # build_journey_tables() can capture it without mutating boxes in place
-    attr(point_data, "pre_box") <- pre_box
-
     # Assign pre-location events to box_id 0
     raw_idx[pre_loc_mask] <- 0L
   }
@@ -206,15 +242,38 @@ derive_point_events <- function(data, boxes, cols, location_categories,
   box_ids  <- boxes$box_id[safe_idx]
   box_ids[raw_idx == 0L] <- 0L
 
+  # ── Vertical position: single midline, or one lane per lane-column value ──
+  if (is.null(lane_col)) {
+    # No swimlanes — every event shares the box midline (pre-Stage-4 behaviour).
+    y_vals <- rep(box_height / 2, nrow(point_data))
+  } else {
+    # Lane order: factor levels if supplied as a factor (lets callers pin an
+    # explicit ordering), else first appearance in the data.
+    lane_vals <- point_data$lane
+    lane_levels <- if (is.factor(lane_vals)) {
+      levels(lane_vals)
+    } else {
+      unique(as.character(lane_vals))
+    }
+
+    lane_idx <- match(as.character(lane_vals), lane_levels)
+    base     <- box_height * 1.3
+    # Centre of lane i's band [base + i*gap + (i-1)*h, base + i*gap + i*h].
+    y_vals   <- base + lane_idx * lane_gap + (lane_idx - 0.5) * lane_height
+
+    # Store lane as a factor carrying the resolved ordering so the renderer's
+    # axis breaks (sorted by y) come out in lane order.
+    point_data$lane <- factor(as.character(lane_vals), levels = lane_levels)
+  }
+
   point_data <- point_data |>
     dplyr::mutate(
       box_id = box_ids,
       x      = timestamp,
-      # y midline — same band for all events in a single-spell plot
-      y      = box_height / 2
+      y      = y_vals
     )
 
-  point_data
+  list(events = point_data, pre_box = pre_box)
 }
 
 
@@ -226,7 +285,9 @@ derive_point_events <- function(data, boxes, cols, location_categories,
 build_journey_tables <- function(data, cols, location_categories,
                                  box_height          = 1,
                                  tail_strategy       = "last_event",
-                                 terminal_activities = NULL) {
+                                 terminal_activities = NULL,
+                                 lane_height         = box_height,
+                                 lane_gap            = 0.05 * box_height) {
 
   # Derive location boxes
   boxes  <- derive_location_boxes(
@@ -236,17 +297,51 @@ build_journey_tables <- function(data, cols, location_categories,
     terminal_activities = terminal_activities
   )
 
-  # Derive instantaneous events, passing boxes so interval join can run
-  events <- derive_point_events(data, boxes, cols, location_categories,
-                                box_height = box_height)
+  # Read off spell_open before bind_rows()/arrange() below, which build a new
+  # tibble and would otherwise drop it.
+  spell_open <- attr(boxes, "spell_open") %||% FALSE
 
-  # If pre-location events were found, derive_point_events attaches a pre_box
-  pre_box <- attr(events, "pre_box")
+  # Derive instantaneous events, passing boxes so interval join can run.
+  # lane geometry is inert unless cols$lane names a column (swimlanes).
+  point_result <- derive_point_events(data, boxes, cols, location_categories,
+                                      box_height  = box_height,
+                                      lane_height = lane_height,
+                                      lane_gap    = lane_gap)
+  events  <- point_result$events
+  pre_box <- point_result$pre_box
+
+  # If pre-location events were found, derive_point_events returned a pre_box
   if (!is.null(pre_box)) {
     # Renumber: pre_box gets box_id 0, existing boxes keep their IDs
     boxes <- dplyr::bind_rows(pre_box, boxes) |>
       dplyr::arrange(xmin)
   }
+  attr(boxes, "spell_open") <- spell_open
 
   list(boxes = boxes, events = events)
+}
+
+
+# ── .stays_from_boxes ───────────────────────────────────────────────────────────
+#
+# Reshape a derived `boxes` table into a per-stay summary row set: one row per
+# location stay with its duration in seconds and the terminal / end_inferred
+# flags. Shared by plot_patient_journey()'s return_data path (Stage 6d) and the
+# cohort summarisers in aggregate.R, so a single-case summary and the cohort
+# summary for that case agree exactly. The synthetic "(pre-admission)" box
+# (box_id 0, injected by derive_point_events() for events preceding the first
+# move) is dropped: it is a rendering artefact, not a recorded stay.
+.stays_from_boxes <- function(boxes, case_id) {
+  b <- boxes
+  if ("box_id" %in% names(b)) b <- b[b$box_id != 0, , drop = FALSE]
+
+  tibble::tibble(
+    case_id       = case_id,
+    location      = b$location,
+    xmin          = b$xmin,
+    xmax          = b$xmax,
+    duration_secs = as.numeric(b$duration, units = "secs"),
+    end_inferred  = b$end_inferred,
+    terminal      = b$terminal
+  )
 }

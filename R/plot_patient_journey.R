@@ -8,19 +8,98 @@
 #   5. Delegates to render_journey_plot()
 #   6. Returns the ggplot object (or list when return_data = TRUE)
 #
-# Source all files in R/ to use:
-#   source("R/utils.R"); source("R/validate.R")
-#   source("R/transform.R"); source("R/render.R")
-#   source("R/plot_patient_journey.R")
-
-
+# Despite the name (kept for backward compatibility — see locked decision 5),
+# this renders any event log built from exclusive states over time, not just
+# clinical spells: a "location" is any state a case occupies exclusively for
+# an interval — a ward, a complaint stage, a ticket status, a pipeline step —
+# and location_categories/state_label exist precisely so callers can point
+# this at complaint_example or support_ticket_example as readily as a
+# patient spell.
+#
+#' Visualise an event log as a location-band timeline
+#'
+#' Renders one case's event log as a horizontal timeline: coloured boxes for
+#' each exclusive state the case occupies over time (a ward, a complaint
+#' stage, a ticket status — anything `location_categories` marks as a move),
+#' with instantaneous events plotted as points on the midline. Despite the
+#' name (kept for backward compatibility), this works for any event log built
+#' from exclusive states over time, not just clinical spells.
+#'
+#' @param data A data frame or tibble containing the event log.
+#' @param case_id The single case identifier to visualise (must be present in
+#'   `data[[case_col]]`).
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a move to a new exclusive state (these events create boxes).
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings. `patient_col` may be `NULL` for event logs with no secondary
+#'   identifier.
+#' @param schema An [event_log_schema()] object bundling the column-mapping
+#'   arguments, or the literal string `"auto"` to run [autodetect_schema()],
+#'   or `NULL` (default) to ignore. Per-field precedence, highest wins: an
+#'   explicitly supplied individual argument (`time_col`, `case_col`, ...) >
+#'   the matching schema field > this function's own hardcoded default.
+#' @param tz Timezone used when parsing character timestamps (`POSIXct`
+#'   input keeps its own `tzone`).
+#' @param terminal_activities Character vector of `activity` values that are
+#'   terminal states (e.g. `"Discharged"`, `"Closed"`). A terminal final move
+#'   renders as a zero-duration marker instead of a box with an invented
+#'   duration.
+#' @param exclude_categories Character vector of `act_type` values to drop
+#'   entirely before plotting, or `NULL`.
+#' @param show_labels Logical; show `ggrepel` labels for point events.
+#' @param label_max Maximum label character length before truncation.
+#' @param show_duration Logical; show a formatted duration label above each
+#'   non-terminal box (`end_inferred` boxes get a `"+"` suffix).
+#' @param label_boxes Logical; label each box directly with its location
+#'   name, at box centre.
+#' @param reference_lines Data frame with `offset_hours` (numeric, hours from
+#'   the spell's first event) and `label`, drawn as dashed target-threshold
+#'   lines, or `NULL`.
+#' @param event_type_top_n When the distinct `act_type` count exceeds this,
+#'   keep the top-N most frequent event types and recode the rest to
+#'   `"Other"`. `NULL` = no bucketing.
+#' @param lane_col Column in `data` whose distinct values become swimlanes
+#'   for point events, drawn above the location band. `NULL` (default) keeps
+#'   a single midline.
+#' @param lane_height,lane_gap Swimlane geometry, in `box_height` units.
+#'   `NULL` defaults to `box_height` and `0.05 * box_height` respectively.
+#' @param state_label Fill-legend title. A journey's boxes are `"Location"`
+#'   by default; pass e.g. `"Stage"` or `"Status"` for a linear stage
+#'   process.
+#' @param location_palette,event_palette Named character vectors (level ->
+#'   hex colour) overriding the automatic palettes, or `NULL`.
+#' @param palette_style Auto-palette style used when `location_palette`/
+#'   `event_palette` are `NULL`: `"okabe"` (default, colourblind-safe) or
+#'   `"brewer"` (the original Set2/Dark2 palette).
+#' @param box_height Height of the location band, in plot y-units.
+#' @param box_gap_prop Proportion of each box's width trimmed from its right
+#'   edge to create a thin visual gap between adjacent locations.
+#' @param title Plot title; `NULL` auto-generates one from `case_id` /
+#'   `patient_col`.
+#' @param tail_strategy Strategy for inferring the final box's end time:
+#'   `"last_event"` extends to the last event, falling back to `"median"`
+#'   then `"fixed"`.
+#' @param interactive Logical; render as an interactive `ggiraph` `girafe`
+#'   widget instead of a static ggplot. Requires the `ggiraph` package.
+#' @param return_data Logical; if `TRUE`, return
+#'   `list(plot, boxes, events, summary)` instead of just the plot.
+#'
+#' @return A `ggplot` object (or a `girafe` widget when `interactive = TRUE`),
+#'   or a list when `return_data = TRUE`.
+#'
+#' @examples
+#' plot_patient_journey(example_journey, case_id = "SP-001")
+#'
+#' @export
 plot_patient_journey <- function(
     data,
 
     # Which spell to visualise
     case_id,
 
-    # Which act_type values represent physical location moves (create boxes)
+    # Which act_type values represent a move to a new exclusive state (create
+    # boxes) — a physical location for a patient spell, but equally a stage
+    # move for a complaint or a status change for a support ticket.
     location_categories = c("location_move", "ed_location_move"),
 
     # Column name mappings — change these if your data uses different names.
@@ -30,6 +109,14 @@ plot_patient_journey <- function(
     activity_col    = "activity",
     case_col        = "caseID",
     patient_col     = "K_Number",
+
+    # Schema object (event_log_schema()) bundling the column-mapping args
+    # above. NULL = ignored. The literal string "auto" triggers
+    # autodetect_schema(data, location_categories) — autodetection never runs
+    # silently for any other value. Per-field precedence, highest wins:
+    # an explicitly supplied individual argument (time_col, case_col, ...)
+    # > the matching schema field > this function's own hardcoded default.
+    schema = NULL,
 
     # Timezone used when parsing character timestamps (POSIXct input keeps
     # its own tzone). Wall-clock exports from UK systems should pass
@@ -48,9 +135,49 @@ plot_patient_journey <- function(
     show_labels = FALSE,
     label_max   = 30L,
 
+    # Show a formatted duration label above each non-terminal box
+    # (end_inferred boxes get a "+" suffix, since the end time is imputed)
+    show_duration = FALSE,
+
+    # Label each box directly with its location name, at box centre
+    label_boxes = FALSE,
+
+    # Reference / target-threshold lines. Data frame with `offset_hours`
+    # (numeric, hours from the spell's first event) and `label`, or NULL.
+    reference_lines = NULL,
+
+    # When the distinct act_type count exceeds this, keep the top-N most
+    # frequent event types and recode the rest to "Other" before colour/shape
+    # scales are built. NULL = no bucketing.
+    event_type_top_n = NULL,
+
+    # Swimlanes: stack concurrent point-event tracks into horizontal lanes.
+    # `lane_col` names a column in `data` whose distinct values become lanes
+    # drawn above the location band; it affects point events only (the location
+    # boxes stay the spine). Lane order is factor levels if the column is a
+    # factor, else first appearance. NULL (default) → single midline, output
+    # byte-identical to the pre-Stage-4 baseline. `lane_height`/`lane_gap` tune
+    # lane geometry and default (NULL) to `box_height` and `0.05 * box_height`.
+    # Note: many lanes make a tall plot — there is no automatic lane cap.
+    lane_col    = NULL,
+    lane_height = NULL,
+    lane_gap    = NULL,
+
+    # Fill-legend title. A journey's boxes are "Location" by default, but for a
+    # linear stage process (complaint, ticket, approval pipeline) the exclusive
+    # states are stages/statuses, not places — pass e.g. "Stage" or "Status".
+    # Threaded through opts to scale_fill_manual(name = state_label). The
+    # default reproduces prior output exactly.
+    state_label = "Location",
+
     # Colour overrides — named character vectors (level → hex colour), or NULL = auto
     location_palette = NULL,
     event_palette    = NULL,
+
+    # Auto-palette style used when location_palette/event_palette are NULL.
+    # "okabe" (default): colourblind-safe Okabe-Ito based palette. "brewer":
+    # the original Set2/Dark2 palette, for callers pinning old colours.
+    palette_style = c("okabe", "brewer"),
 
     # Visual geometry
     box_height    = 0.25,
@@ -65,23 +192,95 @@ plot_patient_journey <- function(
     # "last_event" → extend to last event; falls back to "median" then "fixed"
     tail_strategy = "last_event",
 
+    # Render as an interactive ggiraph girafe widget instead of a static
+    # ggplot. Box, terminal-marker, and event-point layers gain tooltips
+    # (location/duration/entry-exit for boxes, with an "(end inferred)" flag
+    # so a tooltip never overclaims an imputed end). Requires the ggiraph
+    # package (Suggests only).
+    interactive = FALSE,
+
     # Set TRUE to return list(plot, boxes, events) for debugging or extension
     return_data = FALSE
 ) {
 
+  if (interactive && !requireNamespace("ggiraph", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg ggiraph} is required for {.arg interactive = TRUE}.",
+      "i" = "Install it with {.code install.packages(\"ggiraph\")}."
+    ))
+  }
+
+  # ── Resolve schema, if any, before touching the column-mapping args ───────
+  # missing(x) reflects whether the *caller* supplied x, independent of x's
+  # bound default value — this is what lets an explicit argument beat the
+  # schema while an omitted argument still falls through to it.
+  if (identical(schema, "auto")) {
+    schema <- autodetect_schema(
+      data,
+      location_categories = if (missing(location_categories)) NULL else location_categories
+    )
+  }
+
+  if (!is.null(schema) && !inherits(schema, "event_log_schema")) {
+    cli::cli_abort(c(
+      "{.arg schema} must be an {.cls event_log_schema} object, the string
+       {.val auto}, or {.code NULL}.",
+      "x" = "You supplied an object of class {.cls {class(schema)}}."
+    ))
+  }
+
+  if (!is.null(schema)) {
+    if (missing(time_col)            && !is.null(schema$time_col))            time_col            <- schema$time_col
+    if (missing(case_col)            && !is.null(schema$case_col))            case_col            <- schema$case_col
+    if (missing(act_type_col)        && !is.null(schema$act_type_col))        act_type_col        <- schema$act_type_col
+    if (missing(activity_col)        && !is.null(schema$activity_col))        activity_col        <- schema$activity_col
+    if (missing(patient_col)         && !is.null(schema$patient_col))         patient_col         <- schema$patient_col
+    if (missing(location_categories) && !is.null(schema$location_categories)) location_categories <- schema$location_categories
+  }
+
+  # ── Resolve swimlane geometry (relative to box_height) and validate lane_col ─
+  # Defaults are expressed relative to box_height rather than baked into the
+  # signature so they track a caller-supplied box_height.
+  if (is.null(lane_height)) lane_height <- box_height
+  if (is.null(lane_gap))    lane_gap    <- 0.05 * box_height
+
+  if (!is.null(lane_col)) {
+    if (!is.character(lane_col) || length(lane_col) != 1L) {
+      cli::cli_abort(c(
+        "{.arg lane_col} must be a single column name or {.code NULL}.",
+        "x" = "You supplied an object of class {.cls {class(lane_col)}}."
+      ))
+    }
+    if (!lane_col %in% names(data)) {
+      suggestions <- suggest_matches(lane_col, names(data))
+      hint <- if (length(suggestions) > 0) {
+        cli::format_inline("Did you mean {.val {suggestions}}?")
+      } else {
+        cli::format_inline("Columns present in {.arg data}: {.val {names(data)}}")
+      }
+      cli::cli_abort(c(
+        "{.arg lane_col} {.val {lane_col}} was not found in {.arg data}.",
+        "i" = hint
+      ))
+    }
+  }
+
   # ── Resolve column names into a single named list ─────────────────────────
   # All downstream functions use this list rather than the raw arg names, so
-  # renaming an argument never requires touching the internals.
+  # renaming an argument never requires touching the internals. `lane` is NULL
+  # unless swimlanes were requested (validate/transform treat NULL as absent).
   cols <- list(
     time     = time_col,
     act_type = act_type_col,
     activity = activity_col,
     case     = case_col,
-    patient  = patient_col
+    patient  = patient_col,
+    lane     = lane_col
   )
 
   # ── Validate inputs and get a cleaned single-spell tibble ─────────────────
   spell <- validate_event_log(data, cols, case_id, location_categories, tz = tz)
+  validate_reference_lines(reference_lines)
 
   # ── Drop excluded categories now that validation has passed ───────────────
   if (!is.null(exclude_categories)) {
@@ -112,7 +311,9 @@ plot_patient_journey <- function(
   tables <- build_journey_tables(spell, cols, location_categories,
                                  box_height          = box_height,
                                  tail_strategy       = tail_strategy,
-                                 terminal_activities = terminal_activities)
+                                 terminal_activities = terminal_activities,
+                                 lane_height         = lane_height,
+                                 lane_gap            = lane_gap)
 
   boxes  <- tables$boxes
   events <- tables$events
@@ -122,7 +323,7 @@ plot_patient_journey <- function(
     title <- if (is.null(cols$patient)) {
       paste0("Case ", case_id)
     } else {
-      paste0("Patient ", spell[[cols$patient]][1], " — Spell ", case_id)
+      paste0("Patient ", spell[[cols$patient]][1], " \u2014 Spell ", case_id)
     }
   }
 
@@ -130,19 +331,38 @@ plot_patient_journey <- function(
   opts <- list(
     show_labels      = show_labels,
     label_max        = label_max,
+    show_duration    = show_duration,
+    label_boxes      = label_boxes,
+    reference_lines  = reference_lines,
+    event_type_top_n = event_type_top_n,
     location_palette = location_palette,
     event_palette    = event_palette,
+    palette_style    = palette_style,
     box_height       = box_height,
     box_gap_prop     = box_gap_prop,
-    title            = title
+    title            = title,
+    state_label      = state_label,
+    x_scale          = "datetime",
+    facet_by         = NULL,
+    spell_open       = attr(boxes, "spell_open") %||% FALSE,
+    lanes_active     = !is.null(lane_col),
+    interactive      = interactive
   )
 
   # ── Render ────────────────────────────────────────────────────────────────
-  p <- render_journey_plot(boxes, events, opts)
+  p <- if (interactive) {
+    render_journey_plot_interactive(boxes, events, opts)
+  } else {
+    render_journey_plot(boxes, events, opts)
+  }
 
   # ── Return ────────────────────────────────────────────────────────────────
+  # return_data additionally carries a per-stay duration summary (Stage 6d),
+  # built from the boxes just derived so it agrees exactly with the cohort-level
+  # summarise_journey_durations() for this case.
   if (return_data) {
-    list(plot = p, boxes = boxes, events = events)
+    summary <- .stays_from_boxes(boxes, case_id)
+    list(plot = p, boxes = boxes, events = events, summary = summary)
   } else {
     p
   }

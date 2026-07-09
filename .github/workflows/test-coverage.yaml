@@ -1,0 +1,59 @@
+name: test-coverage
+on:
+  pull_request:
+    branches: [ main, dev_stages ]
+  push:
+    branches: [ main, dev_stages ]
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr, any::xml2
+          needs: coverage
+
+      - name: Test coverage
+        run: |
+          # R/eventviz-package.R holds only package-level roxygen tags and a
+          # globalVariables() declaration - no executable logic to cover.
+          # (The example datasets live in data/ as lazy-loaded .rda files
+          # built by the data-raw/ scripts, so they carry no load-time code
+          # for covr to trace.)
+          cov <- covr::package_coverage(
+            quiet = FALSE,
+            clobber = FALSE,
+            line_exclusions = list("R/eventviz-package.R")
+          )
+          covr::to_cobertura(cov)
+        shell: Rscript {0}
+
+      - uses: codecov/codecov-action@v4
+        with:
+          # cobertura.xml is created by covr::to_cobertura() above
+          files: ./cobertura.xml
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' && true || false }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Show testthat output
+        if: always()
+        run: |
+          find '${{ runner.temp }}/package' -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-test-failures
+          path: ${{ runner.temp }}/package
