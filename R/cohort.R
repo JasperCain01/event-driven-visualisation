@@ -23,6 +23,13 @@
 # start-aligned cases share a "+Nh" axis. The `duration` column is deliberately
 # left as a difftime: it feeds format_duration() for the duration labels and
 # must keep true clock units, not be reinterpreted as hours.
+#
+# Always rebases events$x/timestamp, even when events has zero rows: hrs()
+# is safe on an empty POSIXct vector (difftime() returns numeric(0)), and
+# skipping the conversion left a case with no point events holding onto its
+# original POSIXct type while every other case's events became numeric -
+# dplyr::bind_rows() across cases then failed to reconcile the mismatched
+# column types for align_start = TRUE cohorts.
 .rebase_to_elapsed_hours <- function(boxes, events) {
   origin <- min(boxes$xmin)
   hrs <- function(x) as.numeric(difftime(x, origin, units = "hours"))
@@ -31,23 +38,53 @@
   boxes$xmax        <- hrs(boxes$xmax)
   boxes$xmin_render <- hrs(boxes$xmin_render)
 
-  if (nrow(events) > 0) {
-    events$x         <- hrs(events$x)
-    events$timestamp <- hrs(events$timestamp)
-  }
+  events$x         <- hrs(events$x)
+  events$timestamp <- hrs(events$timestamp)
 
   list(boxes = boxes, events = events)
 }
 
 
-# ── plot_journey_cohort ───────────────────────────────────────────────────────
-#
-# Visualise several spells as a faceted small-multiples grid.
-#
-# case_ids = NULL plots every case in `data` (subject to max_cases); pass a
-# vector to select a subset. align_start = FALSE compares cases on absolute
-# time (free per-panel x range); TRUE rebases each case to its first move and
-# compares them on one shared elapsed-hours axis.
+#' Visualise several cases as a faceted small-multiples grid
+#'
+#' Lays several cases out one facet panel per case, via
+#' [ggplot2::facet_wrap()], so a cohort can be compared at a glance. Every
+#' case is run through the same validate + derive pipeline
+#' [plot_patient_journey()] uses, so per-location colours stay consistent
+#' across panels.
+#'
+#' @param data A data frame or tibble containing the event log for the whole
+#'   cohort.
+#' @param case_ids Character vector of cases to plot, or `NULL` (default) to
+#'   plot every case in `data`, subject to `max_cases`.
+#' @param location_categories Character vector of `act_type` values that mark
+#'   a move to a new exclusive state.
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings, as in [plot_patient_journey()].
+#' @param tz Timezone used when parsing character timestamps.
+#' @param terminal_activities Character vector of terminal `activity` values.
+#' @param exclude_categories Character vector of `act_type` values to drop
+#'   before plotting, or `NULL`.
+#' @param align_start Logical. `FALSE` (default) compares cases on absolute
+#'   time (free per-panel x range); `TRUE` rebases each case to its first
+#'   move and compares them on one shared elapsed-hours axis.
+#' @param ncol Number of facet columns, or `NULL` to let `facet_wrap()`
+#'   choose.
+#' @param max_cases Guard against faceting too many spells at once (a hang,
+#'   not a plot); aborts with advice to pass explicit `case_ids` if exceeded.
+#' @param show_duration,label_boxes,event_type_top_n,state_label,location_palette,event_palette,palette_style,box_height,box_gap_prop,title
+#'   Passthrough render options mirroring [plot_patient_journey()].
+#' @param return_data Logical; if `TRUE`, return `list(plot, boxes, events)`
+#'   instead of just the plot.
+#'
+#' @return A `ggplot` object, or a list when `return_data = TRUE`.
+#'
+#' @examples
+#' plot_journey_cohort(complaint_example, case_col = "complaint_id",
+#'                      location_categories = "stage_change",
+#'                      patient_col = NULL, case_ids = c("CMP-01", "CMP-02"))
+#'
+#' @export
 plot_journey_cohort <- function(
     data,
     case_ids = NULL,
@@ -187,7 +224,7 @@ plot_journey_cohort <- function(
   }
 
   if (is.null(title)) {
-    title <- paste0("Cohort — ", length(case_ids), " case",
+    title <- paste0("Cohort \u2014 ", length(case_ids), " case",
                     if (length(case_ids) == 1) "" else "s",
                     if (align_start) " (start-aligned)" else "")
   }

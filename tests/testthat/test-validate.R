@@ -5,10 +5,6 @@
 library(testthat)
 library(dplyr)
 
-# Source all R files (order matters: utils before validate)
-source("../../R/utils.R")
-source("../../R/validate.R")
-
 # ── Shared test fixture ────────────────────────────────────────────────────────
 
 make_valid_log <- function() {
@@ -33,7 +29,6 @@ cols <- list(
 
 loc_cats <- c("ed_location_move", "location_move")
 
-
 # ── 1. data type check ────────────────────────────────────────────────────────
 
 test_that("non-data-frame input aborts with informative message", {
@@ -43,7 +38,6 @@ test_that("non-data-frame input aborts with informative message", {
   )
 })
 
-
 # ── 2. Missing columns ────────────────────────────────────────────────────────
 
 test_that("missing column produces error listing missing and present columns", {
@@ -51,7 +45,6 @@ test_that("missing column produces error listing missing and present columns", {
   err <- expect_error(validate_event_log(bad, cols, "SP-001", loc_cats))
   expect_match(conditionMessage(err), "act_type")
 })
-
 
 # ── 3. Unknown case_id ────────────────────────────────────────────────────────
 
@@ -61,7 +54,6 @@ test_that("unknown case_id aborts and shows available IDs", {
   )
   expect_match(conditionMessage(err), "SP-001")
 })
-
 
 # ── 4. Timestamp coercion ─────────────────────────────────────────────────────
 
@@ -79,7 +71,6 @@ test_that("unparseable timestamp aborts and names the bad row", {
   expect_match(conditionMessage(err), "parse")
 })
 
-
 # ── 5. No location events ─────────────────────────────────────────────────────
 
 test_that("no matching location act_types aborts with near-match suggestion", {
@@ -94,7 +85,6 @@ test_that("no matching location act_types aborts with near-match suggestion", {
   )
   expect_match(conditionMessage(err), "location_categories")
 })
-
 
 # ── 6. Empty activity on location move ───────────────────────────────────────
 
@@ -112,7 +102,6 @@ test_that("blank activity on a location move aborts", {
   expect_match(conditionMessage(err), "non-empty")
 })
 
-
 # ── 7. Multiple patients under one caseID ────────────────────────────────────
 
 test_that("multiple K_Numbers under one caseID warns but does not abort", {
@@ -123,7 +112,6 @@ test_that("multiple K_Numbers under one caseID warns but does not abort", {
     regexp = "2 distinct"
   )
 })
-
 
 # ── 8. Stable sort on duplicate timestamps ────────────────────────────────────
 
@@ -136,7 +124,6 @@ test_that("duplicate timestamps are sorted stably (row order preserved within ti
   tied <- result |> dplyr::filter(timestamp == log$timestamp[2])
   expect_equal(tied$activity, c("BP check", "Ward"))
 })
-
 
 # ── 9. Happy path ─────────────────────────────────────────────────────────────
 
@@ -156,7 +143,6 @@ test_that("returned tibble is sorted ascending by timestamp", {
   result <- validate_event_log(log, cols, "SP-001", loc_cats)
   expect_true(all(diff(as.numeric(result$timestamp)) >= 0))
 })
-
 
 # ── 10. Case column literally named "case_id" (data-mask collision) ─────────
 

@@ -29,7 +29,7 @@ infer_box_end <- function(last_xmin, all_timestamps, preceding_durations,
 
   if (strategy == "median") {
     if (length(preceding_durations) > 0) {
-      med_secs <- median(as.numeric(preceding_durations, units = "secs"),
+      med_secs <- stats::median(as.numeric(preceding_durations, units = "secs"),
                          na.rm = TRUE)
       return(last_xmin + med_secs)
     }
@@ -76,7 +76,7 @@ suggest_matches <- function(not_found, available, max_dist = 3) {
   if (length(available) == 0) return(character(0))
 
   # Compute string edit distances (case-insensitive)
-  dists  <- adist(not_found, available, ignore.case = TRUE)
+  dists  <- utils::adist(not_found, available, ignore.case = TRUE)
   # One row per element of not_found; take the closest available value
   best_i <- apply(dists, 1, which.min)
   best_d <- apply(dists, 1, min)
@@ -140,7 +140,7 @@ journey_palette <- function(levels, type = c("location", "event"),
   if (requireNamespace("RColorBrewer", quietly = TRUE) && n <= max_brewer) {
     cols <- RColorBrewer::brewer.pal(max(3L, n), palette_name)[seq_len(n)]
   } else {
-    cols <- hcl.colors(n, palette = if (type == "location") "Pastel 1" else "Dark 3")
+    cols <- grDevices::hcl.colors(n, palette = if (type == "location") "Pastel 1" else "Dark 3")
   }
 
   stats::setNames(cols, levels)

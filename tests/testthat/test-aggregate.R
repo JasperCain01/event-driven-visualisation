@@ -18,15 +18,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/schema.R")
-source("../../R/plot_patient_journey.R")
-source("../../R/aggregate.R")
-
 # ── Hand-computed fixture ───────────────────────────────────────────────────────
 #
 # Three cases over locations A/B/C plus a terminal "Discharge". Hour offsets are

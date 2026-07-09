@@ -15,11 +15,52 @@
 
 # ── plot_stage_ladder ──────────────────────────────────────────────────────────
 #
-# stage_categories names the act_type value(s) marking a stage entry (the direct
-# analogue of location_categories). stage_order pins the vertical order; NULL
-# uses first appearance. stage_targets is a named numeric vector mapping a stage
-# name to its allowed dwell in hours — rendered as a light band from stage entry
-# to entry+target, with any excess dwell drawn in firebrick.
+#' Visualise a linear stage process as a staircase
+#'
+#' For a strictly linear process (a complaint moving through fixed stages, a
+#' purchase order raised then approved then fulfilled), the compelling
+#' question is "where does the time go" — this puts stage on the y-axis (first
+#' stage at the top) and draws one horizontal segment per stage, with thin
+#' grey connectors forming a staircase as the case walks down-and-right like a
+#' Gantt chart. It reuses the same box derivation [plot_patient_journey()]
+#' uses; only the rendering differs.
+#'
+#' @param data A data frame or tibble containing the event log.
+#' @param case_id The single case identifier to visualise.
+#' @param stage_categories Character vector of `act_type` value(s) marking a
+#'   stage entry (the direct analogue of `location_categories`).
+#' @param stage_order Character vector pinning the vertical stage order, or
+#'   `NULL` (default) to use first-appearance order. Every stage present in
+#'   the data must appear in `stage_order` if supplied.
+#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
+#'   mappings, as in [plot_patient_journey()].
+#' @param tz Timezone used when parsing character timestamps.
+#' @param terminal_activities Character vector of terminal `activity` values.
+#' @param stage_targets Named numeric vector mapping a stage name to its
+#'   allowed dwell in hours, rendered as a light band from stage entry to
+#'   entry + target; dwell beyond it is drawn in firebrick. `NULL` = no
+#'   targets shown.
+#' @param show_duration Logical; show a formatted duration label at each
+#'   segment's midpoint.
+#' @param palette_style Auto-palette style: `"okabe"` (default) or
+#'   `"brewer"`.
+#' @param location_palette Named character vector (stage -> hex colour)
+#'   overriding the automatic palette, or `NULL`.
+#' @param tail_strategy Strategy for inferring the final stage's end time.
+#' @param title Plot title; `NULL` auto-generates one from `case_id` /
+#'   `patient_col`.
+#' @param return_data Logical; if `TRUE`, return `list(plot, boxes)` instead
+#'   of just the plot.
+#'
+#' @return A `ggplot` object, or a list when `return_data = TRUE`.
+#'
+#' @examples
+#' plot_stage_ladder(
+#'   complaint_example, case_id = "CMP-01",
+#'   stage_categories = "stage_change", case_col = "complaint_id"
+#' )
+#'
+#' @export
 plot_stage_ladder <- function(
     data, case_id,
     stage_categories,
@@ -98,7 +139,7 @@ plot_stage_ladder <- function(
     title <- if (is.null(cols$patient)) {
       paste0("Case ", case_id)
     } else {
-      paste0("Patient ", spell[[cols$patient]][1], " — Spell ", case_id)
+      paste0("Patient ", spell[[cols$patient]][1], " \u2014 Spell ", case_id)
     }
   }
 

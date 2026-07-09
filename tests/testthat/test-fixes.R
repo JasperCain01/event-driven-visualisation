@@ -8,13 +8,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/plot_patient_journey.R")
-
 # ── Shared fixtures ────────────────────────────────────────────────────────────
 
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")
@@ -43,7 +36,6 @@ same_ts_log <- function() {
   )
 }
 
-
 # ── Defect 1: show_labels dropped every label via y-limit censoring ───────────
 
 test_that("show_labels = TRUE renders without dropping label rows", {
@@ -60,7 +52,6 @@ test_that("default plot (labels off) also builds without warnings", {
   p <- plot_patient_journey(small_log(), case_id = "SP-001")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
-
 
 # ── Defect 2: terminal state was extended into a fake stay ────────────────────
 
@@ -85,7 +76,6 @@ test_that("without terminal_activities the final box end is flagged as inferred"
   expect_false(any(r$boxes$end_inferred[-nrow(r$boxes)]))
 })
 
-
 # ── Defect 3: stored duration falsely reported as unaffected by the nudge ─────
 
 test_that("zero-width box stores true duration 0, and the message says so", {
@@ -95,7 +85,6 @@ test_that("zero-width box stores true duration 0, and the message says so", {
   )
   expect_equal(as.numeric(r$boxes$duration[1], units = "secs"), 0)
 })
-
 
 # ── Defect 4: nudged box hidden underneath its successor ──────────────────────
 
@@ -109,7 +98,6 @@ test_that("render-space stagger prevents the nudged box being overlapped", {
   expect_equal(r$boxes$xmin[2], r$boxes$xmin[1])
 })
 
-
 # ── Defect 5a: typo'd tail_strategy crashed with an unrelated error ───────────
 
 test_that("invalid tail_strategy aborts with a clear match.arg error", {
@@ -119,7 +107,6 @@ test_that("invalid tail_strategy aborts with a clear match.arg error", {
     regexp = "should be one of"
   )
 })
-
 
 # ── Defect 5b: excluding all location categories crashed cryptically ──────────
 
@@ -133,7 +120,6 @@ test_that("exclude_categories removing all location events aborts cleanly", {
     regexp = "No location events remain"
   )
 })
-
 
 # ── Defect 5c: vector case_id crashed with "condition has length > 1" ─────────
 
@@ -151,7 +137,6 @@ test_that("NA case_id aborts with a clear message", {
   )
 })
 
-
 # ── Defect 6: character timestamps silently parsed as UTC ─────────────────────
 
 test_that("tz argument controls parsing of character timestamps", {
@@ -166,7 +151,6 @@ test_that("POSIXct input keeps its own tzone regardless of tz argument", {
                             tz = "Australia/Sydney", return_data = TRUE)
   expect_equal(attr(r$boxes$xmin, "tzone"), "UTC")
 })
-
 
 # ── patient_col = NULL support ─────────────────────────────────────────────────
 

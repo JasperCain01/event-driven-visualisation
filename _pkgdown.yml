@@ -1,0 +1,59 @@
+url: https://jaspercain01.github.io/event-driven-visualisation/
+
+template:
+  bootstrap: 5
+
+home:
+  title: "eventviz: visualise any timestamped event log"
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+
+articles:
+  - title: Get started
+    navbar: ~
+    contents:
+      - getting-started
+      - adapting-your-data
+      - linear-processes
+      - cohort-analysis
+
+reference:
+  - title: Plot a single case
+    desc: >
+      Visualise one case's event log as a location-band timeline or, for a
+      strictly linear process, a staircase diagram.
+    contents:
+      - plot_patient_journey
+      - plot_stage_ladder
+      - plot_journey_with_summary
+
+  - title: Compare a cohort
+    desc: Facet several cases at once, or reduce a cohort to statistics.
+    contents:
+      - plot_journey_cohort
+      - summarise_journey_durations
+      - summarise_stage_durations
+      - summarise_breach_rate
+      - summarise_transitions
+      - plot_transition_summary
+
+  - title: Adapt your data
+    desc: Get your own event log into the shape eventviz expects.
+    contents:
+      - pivot_events_longer
+      - event_log_schema
+      - autodetect_schema
+      - print.event_log_schema
+
+  - title: Theming
+    contents:
+      - theme_journey
+
+  - title: Example datasets
+    contents:
+      - example_journey
+      - complaint_example
+      - support_ticket_example

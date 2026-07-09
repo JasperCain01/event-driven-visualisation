@@ -12,17 +12,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/render_interactive.R")
-source("../../R/plot_patient_journey.R")
-source("../../R/stage_ladder.R")
-source("../../R/cohort.R")
-source("../../R/theme.R")
-source("../../R/example_data.R")   # provides `support_ticket_example`
-
 stages <- c("Open", "Assigned", "In Progress", "Waiting on Customer", "Resolved", "Closed")
 
 # ── Dataset sanity ───────────────────────────────────────────────────────────────
@@ -58,6 +47,21 @@ test_that("the still-open ticket (TCK-04) triggers the ongoing-spell indication"
     patient_col = NULL, terminal_activities = "Closed", return_data = TRUE
   ))
   expect_true(attr(res$boxes, "spell_open"))
+})
+
+# ── Visual regression baseline (vdiffr) ──────────────────────────────────────────
+# Stage 9 gap-closing: the ticket dataset was exercised end-to-end (above) but
+# had no vdiffr baseline of its own, unlike lanes/cohort/ladder. This covers the
+# band layout, the non-healthcare dataset's most representative view.
+
+test_that("support_ticket_example band layout matches its baseline", {
+  skip_if_not_installed("vdiffr")
+  p <- suppressMessages(plot_patient_journey(
+    support_ticket_example, case_id = "TCK-01",
+    location_categories = "status_change", case_col = "ticket_id",
+    patient_col = NULL, terminal_activities = "Closed", state_label = "Status"
+  ))
+  vdiffr::expect_doppelganger("support-ticket-band", p)
 })
 
 # ── End-to-end: staircase layout ─────────────────────────────────────────────────

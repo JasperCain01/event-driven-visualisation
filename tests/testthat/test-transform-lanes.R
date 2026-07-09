@@ -11,13 +11,6 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
-source("../../R/utils.R")
-source("../../R/validate.R")
-source("../../R/transform.R")
-source("../../R/render.R")
-source("../../R/theme.R")
-source("../../R/plot_patient_journey.R")
-
 # ── Shared fixtures ─────────────────────────────────────────────────────────────
 
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")
@@ -53,7 +46,7 @@ lane_log <- function() {
 test_that("lane y positions match the hand-computed band centres", {
   log   <- lane_log()
   boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)
+  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   # base = 1.3, lane_gap = 0.05, lane_height = 1.
   # y_i = base + i*gap + (i - 0.5)*height
@@ -71,7 +64,7 @@ test_that("lane y positions match the hand-computed band centres", {
 test_that("lane column is stored as a factor in first-appearance order", {
   log   <- lane_log()
   boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)
+  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   expect_true(is.factor(evts$lane))
   expect_equal(levels(evts$lane), c("Nursing", "Medical", "Diagnostics"))
@@ -84,7 +77,7 @@ test_that("a factor lane column pins an explicit lane ordering", {
                      levels = c("Diagnostics", "Medical", "Nursing"))
 
   boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)
+  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   # Diagnostics is now lane 1 -> 1.85, Nursing lane 3 -> 3.95.
   expect_equal(evts$y[evts$activity == "Bloods"], 1.85)
@@ -97,7 +90,7 @@ test_that("lane_gap and lane_height feed straight into the arithmetic", {
   log   <- lane_log()
   boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats,
-                               box_height = 1, lane_height = 2, lane_gap = 0.1)
+                               box_height = 1, lane_height = 2, lane_gap = 0.1)$events
 
   # base = 1.3; y_i = 1.3 + i*0.1 + (i - 0.5)*2
   #   Nursing (i=1) -> 1.3 + 0.1 + 1 = 2.4
@@ -111,7 +104,7 @@ test_that("lane_gap and lane_height feed straight into the arithmetic", {
 test_that("lane_col = NULL keeps every event on the box midline", {
   log   <- lane_log()
   boxes <- derive_location_boxes(log, cols_base, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_base, loc_cats, box_height = 1)
+  evts  <- derive_point_events(log, boxes, cols_base, loc_cats, box_height = 1)$events
 
   expect_true(all(evts$y == 0.5))          # box_height / 2
   expect_false("lane" %in% names(evts))    # no lane column added
@@ -128,7 +121,7 @@ test_that("empty point-event set still returns a lane column when lanes active",
     lane      = c("Nursing", "Nursing")
   )
   boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)
+  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   expect_equal(nrow(evts), 0L)
   expect_true("lane" %in% names(evts))
