@@ -69,6 +69,7 @@ across panels.</p>
 <span>  tz <span class="op">=</span> <span class="st">"UTC"</span>,</span>
 <span>  terminal_activities <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  exclude_categories <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  tail_strategy <span class="op">=</span> <span class="st">"last_event"</span>,</span>
 <span>  align_start <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  ncol <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_cases <span class="op">=</span> <span class="fl">25L</span>,</span>
@@ -115,12 +116,19 @@ mappings, as in [plot_patient_journey()].</p></dd>
 
 
 <dt id="arg-terminal-activities">terminal_activities<a class="anchor" aria-label="anchor" href="#arg-terminal-activities"></a></dt>
-<dd><p>Character vector of terminal `activity` values.</p></dd>
+<dd><p>Character vector of terminal `activity` values.
+A case whose spell never reaches one renders with the `(ongoing)`
+open-spell marker in its own panel.</p></dd>
 
 
 <dt id="arg-exclude-categories">exclude_categories<a class="anchor" aria-label="anchor" href="#arg-exclude-categories"></a></dt>
 <dd><p>Character vector of `act_type` values to drop
 before plotting, or `NULL`.</p></dd>
+
+
+<dt id="arg-tail-strategy">tail_strategy<a class="anchor" aria-label="anchor" href="#arg-tail-strategy"></a></dt>
+<dd><p>Strategy for inferring each case's final box end
+time, as in <code><a href="plot_patient_journey.html">plot_patient_journey()</a></code>.</p></dd>
 
 
 <dt id="arg-align-start">align_start<a class="anchor" aria-label="anchor" href="#arg-align-start"></a></dt>

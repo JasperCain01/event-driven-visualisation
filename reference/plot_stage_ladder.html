@@ -124,8 +124,12 @@ mappings, as in [plot_patient_journey()].</p></dd>
 <dt id="arg-stage-targets">stage_targets<a class="anchor" aria-label="anchor" href="#arg-stage-targets"></a></dt>
 <dd><p>Named numeric vector mapping a stage name to its
 allowed dwell in hours, rendered as a light band from stage entry to
-entry + target; dwell beyond it is drawn in firebrick. `NULL` = no
-targets shown.</p></dd>
+entry + target; dwell beyond it is drawn in firebrick. When a case
+revisits a stage, every visit is banded against the same target
+(<code><a href="summarise_breach_rate.html">summarise_breach_rate()</a></code> instead sums a case's visits into one total
+dwell). An open (end-inferred) stage draws only its <em>proven</em> excess —
+dwell observed up to the last recorded event, never the imputed end.
+`NULL` = no targets shown.</p></dd>
 
 
 <dt id="arg-show-duration">show_duration<a class="anchor" aria-label="anchor" href="#arg-show-duration"></a></dt>

@@ -70,7 +70,13 @@ plot_stage_ladder(
 
   Named numeric vector mapping a stage name to its allowed dwell in
   hours, rendered as a light band from stage entry to entry + target;
-  dwell beyond it is drawn in firebrick. \`NULL\` = no targets shown.
+  dwell beyond it is drawn in firebrick. When a case revisits a stage,
+  every visit is banded against the same target
+  ([`summarise_breach_rate()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_breach_rate.md)
+  instead sums a case's visits into one total dwell). An open
+  (end-inferred) stage draws only its *proven* excess — dwell observed
+  up to the last recorded event, never the imputed end. \`NULL\` = no
+  targets shown.
 
 - show_duration:
 

@@ -21,6 +21,7 @@ plot_journey_cohort(
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
+  tail_strategy = "last_event",
   align_start = FALSE,
   ncol = NULL,
   max_cases = 25L,
@@ -64,12 +65,19 @@ plot_journey_cohort(
 
 - terminal_activities:
 
-  Character vector of terminal \`activity\` values.
+  Character vector of terminal \`activity\` values. A case whose spell
+  never reaches one renders with the \`(ongoing)\` open-spell marker in
+  its own panel.
 
 - exclude_categories:
 
   Character vector of \`act_type\` values to drop before plotting, or
   \`NULL\`.
+
+- tail_strategy:
+
+  Strategy for inferring each case's final box end time, as in
+  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md).
 
 - align_start:
 
