@@ -38,8 +38,10 @@
 #' @param terminal_activities Character vector of terminal `activity` values.
 #' @param stage_targets Named numeric vector mapping a stage name to its
 #'   allowed dwell in hours, rendered as a light band from stage entry to
-#'   entry + target; dwell beyond it is drawn in firebrick. `NULL` = no
-#'   targets shown.
+#'   entry + target; dwell beyond it is drawn in firebrick. When a case
+#'   revisits a stage, every visit is banded against the same target
+#'   ([summarise_breach_rate()] instead sums a case's visits into one total
+#'   dwell). `NULL` = no targets shown.
 #' @param show_duration Logical; show a formatted duration label at each
 #'   segment's midpoint.
 #' @param palette_style Auto-palette style: `"okabe"` (default) or
@@ -198,14 +200,21 @@ plot_stage_ladder <- function(
     excess_layers <- list()
 
     for (stg in names(stage_targets)) {
-      row <- seg_boxes[seg_boxes$stage == stg, ]
-      if (nrow(row) == 0) next   # stage present only as a terminal marker
+      rows <- seg_boxes[seg_boxes$stage == stg, ]
+      if (nrow(rows) == 0) next   # stage present only as a terminal marker
       target_secs <- stage_targets[[stg]] * 3600
+
+      # One band per VISIT: a case can re-enter a stage (a ticket bounced
+      # back to "In Progress"), and each visit is measured against the same
+      # target. Still exactly one geom_rect layer per targeted stage — the
+      # layer's data simply carries one row per visit. Note the numeric
+      # counterpart differs by design: summarise_breach_rate() sums a case's
+      # visits to a stage into one total dwell.
       band <- dplyr::tibble(
-        xmin = row$xmin[1],
-        xmax = row$xmin[1] + target_secs,
-        ymin = row$y[1] - half,
-        ymax = row$y[1] + half
+        xmin = rows$xmin,
+        xmax = rows$xmin + target_secs,
+        ymin = rows$y - half,
+        ymax = rows$y + half
       )
       p <- p +
         ggplot2::geom_rect(
@@ -214,13 +223,16 @@ plot_stage_ladder <- function(
           fill = "grey85", alpha = 0.6
         )
 
-      # Excess dwell beyond the target, in firebrick (deferred to draw on top).
-      dwell_secs <- as.numeric(row$xmax[1] - row$xmin[1], units = "secs")
-      if (!row$end_inferred[1] && dwell_secs > target_secs) {
+      # Excess dwell beyond the target, in firebrick (deferred to draw on
+      # top), for every breaching visit. An end_inferred visit's dwell is
+      # imputed, so it never claims a breach.
+      dwell_secs <- as.numeric(rows$xmax - rows$xmin, units = "secs")
+      breached   <- !rows$end_inferred & dwell_secs > target_secs
+      if (any(breached)) {
         excess <- dplyr::tibble(
-          x    = row$xmin[1] + target_secs,
-          xend = row$xmax[1],
-          y    = row$y[1]
+          x    = rows$xmin[breached] + target_secs,
+          xend = rows$xmax[breached],
+          y    = rows$y[breached]
         )
         excess_layers <- c(excess_layers, list(
           ggplot2::geom_segment(

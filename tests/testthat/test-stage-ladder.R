@@ -182,3 +182,27 @@ test_that("stage-ladder plot matches its baseline", {
   p <- ladder("CMP-03", stage_targets = c("Under review" = 120))
   vdiffr::expect_doppelganger("stage-ladder-cmp03", p)
 })
+
+# ── Regression: stage_targets bands every visit to a revisited stage ────────────
+
+test_that("stage_targets bands and marks every visit to a revisited stage", {
+  # TCK-01 enters "In Progress" twice (3h->8h and 31h->40h); both visits
+  # breach a 2h target, so the single band layer must carry one row per
+  # visit and the firebrick excess layer must mark both.
+  res <- suppressMessages(plot_stage_ladder(
+    support_ticket_example, case_id = "TCK-01",
+    stage_categories = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed",
+    stage_targets = c("In Progress" = 2), return_data = TRUE
+  ))
+  gc <- geom_classes(res$plot)
+  band_idx <- which(gc == "GeomRect")
+  expect_length(band_idx, 1L)   # still exactly one band layer per stage
+  expect_equal(nrow(res$plot$layers[[band_idx]]$data), 2L)
+  fb <- which(vapply(res$plot$layers, function(l) {
+    isTRUE(l$aes_params$colour == "firebrick")
+  }, logical(1)))
+  expect_length(fb, 1L)
+  expect_equal(nrow(res$plot$layers[[fb]]$data), 2L)
+  expect_no_warning(ggplot2::ggplot_build(res$plot))
+})

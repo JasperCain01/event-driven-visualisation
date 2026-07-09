@@ -219,8 +219,16 @@ plot_journey_cohort <- function(
                                         palette_style)
   }
   if (is.null(event_palette) && nrow(events_all) > 0) {
-    event_palette <- journey_palette(unique(events_all$act_type), "event",
-                                     palette_style)
+    # The palette must cover what journey_layers() will actually draw: with
+    # event_type_top_n set, the long tail is bucketed to "Other" at render
+    # time, and a palette built over the raw levels left "Other" falling
+    # back to the silent na.value grey. Bucket here the same way (message
+    # suppressed — journey_layers() informs once when it buckets for real).
+    evt_vals <- events_all$act_type
+    if (!is.null(event_type_top_n)) {
+      evt_vals <- suppressMessages(bucket_top_n(evt_vals, event_type_top_n))
+    }
+    event_palette <- journey_palette(unique(evt_vals), "event", palette_style)
   }
 
   if (is.null(title)) {

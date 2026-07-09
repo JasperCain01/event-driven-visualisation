@@ -757,10 +757,8 @@ plot_journey_with_summary <- function(
   timeline <- res$plot
   summary  <- res$summary
 
-  # Per-stage dwell bars, in visit order. Colours reuse journey_palette() so the
-  # bars match the timeline's location fills under the default palette; imputed
-  # final stays carry the package's usual "+" suffix on their label rather than a
-  # separate legend.
+  # Per-stage dwell bars, in visit order. Imputed final stays carry the
+  # package's usual "+" suffix on their label rather than a separate legend.
   summary <- summary |>
     dplyr::mutate(
       location = factor(location, levels = unique(location)),
@@ -770,7 +768,21 @@ plot_journey_with_summary <- function(
                         format_duration(duration_secs))
     )
 
-  bar_cols <- journey_palette(levels(summary$location), "location", "okabe")
+  # Bar colours must reuse the exact palette the timeline's fill scale used.
+  # The timeline's fill levels are the non-terminal boxes (including any
+  # synthetic "(pre-admission)" box) in first-appearance order; the summary
+  # drops the pre-admission artefact and keeps terminal stays, so building a
+  # fresh palette over the summary's own levels shifted every hue by one
+  # whenever the two level sets differed. Stays absent from the timeline's
+  # fill scale (terminals) take the palette positions AFTER the shared levels,
+  # leaving the shared assignments untouched. A location_palette or
+  # palette_style forwarded to the timeline through `...` is honoured here too.
+  dots            <- list(...)
+  timeline_levels <- unique(res$boxes$location[!res$boxes$terminal])
+  all_levels      <- c(timeline_levels,
+                       setdiff(levels(summary$location), timeline_levels))
+  bar_cols <- dots$location_palette %||%
+    journey_palette(all_levels, "location", dots$palette_style %||% "okabe")
 
   bars <- ggplot2::ggplot(
     summary,

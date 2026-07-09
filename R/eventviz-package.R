@@ -15,7 +15,7 @@
 # frame at runtime — but R CMD check's static analysis can't tell the
 # difference, so they're declared here to silence the NOTE.
 utils::globalVariables(c(
-  ".env", ".orig_row", ".use",
+  ".env", ".gap", ".gap_span", ".orig_row", ".use",
   "act_type", "activity", "breached",
   "case_id", "caseID", "complaint_id",
   "day", "dur_lab", "dur_label", "duration", "duration_secs",

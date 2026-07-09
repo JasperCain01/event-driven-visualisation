@@ -177,3 +177,54 @@ test_that("start-aligned cohort plot matches its baseline", {
                            show_duration = TRUE, ncol = 1)
   vdiffr::expect_doppelganger("cohort-aligned", p)
 })
+
+# ── Regression: per-panel gap sizing (absolute mode) ────────────────────────────
+
+test_that("absolute-mode gaps are sized per panel, not against the cohort calendar span", {
+  # Two short spells five months apart. Sizing the gap (and the minimum
+  # render width) against the whole cohort's calendar span rendered every
+  # 1-hour box at ~11 hours wide; per-panel sizing keeps rendered widths a
+  # whisker under the true width.
+  far <- dplyr::bind_rows(
+    tibble::tibble(
+      caseID = "F1", K_Number = "K1",
+      timestamp = hrs(0) + c(0, 3600, 7200),
+      act_type  = c("ed_location_move", "location_move", "obs"),
+      activity  = c("ED", "Ward", "obs")
+    ),
+    tibble::tibble(
+      caseID = "F2", K_Number = "K2",
+      timestamp = hrs(24 * 150) + c(0, 3600, 7200),
+      act_type  = c("ed_location_move", "location_move", "obs"),
+      activity  = c("ED", "Ward", "obs")
+    )
+  )
+  p    <- plot_journey_cohort(far)
+  rect <- ggplot2::ggplot_build(p)$data[[1]]
+  widths_h <- (rect$xmax - rect$xmin) / 3600
+  expect_true(all(widths_h <= 1))     # never wider than the true 1h stay
+  expect_true(all(widths_h > 0.9))    # and only a cosmetic gap narrower
+  expect_no_warning(ggplot2::ggplot_build(p))
+})
+
+# ── Regression: event_type_top_n's "Other" bucket gets a palette colour ─────────
+
+test_that("the 'Other' bucket is coloured from the palette, not na.value grey", {
+  log <- dplyr::bind_rows(
+    cohort_log(),
+    tibble::tibble(
+      caseID = "C1", K_Number = "K1",
+      timestamp = hrs(c(1.2, 1.4, 1.6)),
+      act_type  = c("t_a", "t_b", "t_c"),
+      activity  = c("a", "b", "c")
+    )
+  )
+  p <- suppressMessages(plot_journey_cohort(log, event_type_top_n = 2))
+  built <- ggplot2::ggplot_build(p)
+  gc <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  pt <- built$data[[which(gc == "GeomPoint")[1]]]
+  # 2 kept types + "Other" = 3 groups, every one drawn in a real palette hue
+  expect_equal(length(unique(pt$colour)), 3L)
+  expect_false("grey50" %in% pt$colour)
+  expect_no_warning(ggplot2::ggplot_build(p))
+})
