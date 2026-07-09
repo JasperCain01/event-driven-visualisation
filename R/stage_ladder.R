@@ -41,7 +41,9 @@
 #'   entry + target; dwell beyond it is drawn in firebrick. When a case
 #'   revisits a stage, every visit is banded against the same target
 #'   ([summarise_breach_rate()] instead sums a case's visits into one total
-#'   dwell). `NULL` = no targets shown.
+#'   dwell). An open (end-inferred) stage draws only its *proven* excess —
+#'   dwell observed up to the last recorded event, never the imputed end.
+#'   `NULL` = no targets shown.
 #' @param show_duration Logical; show a formatted duration label at each
 #'   segment's midpoint.
 #' @param palette_style Auto-palette style: `"okabe"` (default) or
@@ -224,14 +226,23 @@ plot_stage_ladder <- function(
         )
 
       # Excess dwell beyond the target, in firebrick (deferred to draw on
-      # top), for every breaching visit. An end_inferred visit's dwell is
-      # imputed, so it never claims a breach.
-      dwell_secs <- as.numeric(rows$xmax - rows$xmin, units = "secs")
-      breached   <- !rows$end_inferred & dwell_secs > target_secs
+      # top), for every breaching visit. An open (end_inferred) stage counts
+      # only its PROVEN dwell: elapsed time up to the last observed event is
+      # a lower bound, so a breach already visible is real and must show —
+      # but the excess is capped at that last observed instant, so a
+      # median/fixed-imputed end never inflates it.
+      end_proven <- rows$xmax
+      if (any(rows$end_inferred)) {
+        last_observed <- max(spell[[cols$time]])
+        end_proven[rows$end_inferred] <-
+          pmin(rows$xmax[rows$end_inferred], last_observed)
+      }
+      dwell_secs <- as.numeric(end_proven - rows$xmin, units = "secs")
+      breached   <- dwell_secs > target_secs
       if (any(breached)) {
         excess <- dplyr::tibble(
           x    = rows$xmin[breached] + target_secs,
-          xend = rows$xmax[breached],
+          xend = end_proven[breached],
           y    = rows$y[breached]
         )
         excess_layers <- c(excess_layers, list(

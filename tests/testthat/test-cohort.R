@@ -228,3 +228,61 @@ test_that("the 'Other' bucket is coloured from the palette, not na.value grey", 
   expect_false("grey50" %in% pt$colour)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
+
+# ── Per-panel ongoing-spell markers ─────────────────────────────────────────────
+
+test_that("open cases get a per-panel '(ongoing)' marker; closed cases do not", {
+  # C1 reaches Discharged; C2 and C3 never reach a terminal state, so
+  # exactly those two panels must carry the open-spell annotation.
+  log <- dplyr::bind_rows(
+    cohort_log(),
+    tibble::tibble(
+      caseID = "C1", K_Number = "K1",
+      timestamp = hrs(5), act_type = "location_move", activity = "Discharged"
+    )
+  )
+  p <- plot_journey_cohort(log, terminal_activities = "Discharged")
+  built <- ggplot2::ggplot_build(p)
+  ongoing_layers <- which(vapply(built$data, function(d) {
+    "label" %in% names(d) && any(d$label == "(ongoing)")
+  }, logical(1)))
+  expect_length(ongoing_layers, 1L)
+  d <- built$data[[ongoing_layers]]
+  expect_equal(nrow(d), 2L)
+  # C1 facets first (panel 1) and is closed; C2/C3 carry the marker.
+  expect_setequal(as.integer(d$PANEL), c(2L, 3L))
+  expect_no_warning(ggplot2::ggplot_build(p))
+})
+
+test_that("ongoing markers render in start-aligned mode too (universal gate)", {
+  p <- plot_journey_cohort(cohort_log(), terminal_activities = "Discharged",
+                           align_start = TRUE)
+  built <- ggplot2::ggplot_build(p)
+  expect_true(any(vapply(built$data, function(d) {
+    "label" %in% names(d) && any(d$label == "(ongoing)")
+  }, logical(1))))
+  expect_no_warning(ggplot2::ggplot_build(p))
+})
+
+test_that("no terminal_activities means no ongoing markers (unchanged default)", {
+  p <- plot_journey_cohort(cohort_log())
+  built <- ggplot2::ggplot_build(p)
+  expect_false(any(vapply(built$data, function(d) {
+    "label" %in% names(d) && any(d$label == "(ongoing)")
+  }, logical(1))))
+})
+
+# ── tail_strategy forwarding ────────────────────────────────────────────────────
+
+test_that("tail_strategy is forwarded per case", {
+  # C1's last event IS its final move, so "last_event" falls back to the
+  # 3h median while "fixed" pins a 30-minute stub — distinguishable ends.
+  res_fixed <- plot_journey_cohort(cohort_log(), case_ids = "C1",
+                                   tail_strategy = "fixed", return_data = TRUE)
+  expect_equal(
+    as.numeric(max(res_fixed$boxes$xmax) - hrs(3), units = "mins"), 30)
+  res_med <- plot_journey_cohort(cohort_log(), case_ids = "C1",
+                                 return_data = TRUE)
+  expect_equal(
+    as.numeric(max(res_med$boxes$xmax) - hrs(3), units = "hours"), 3)
+})

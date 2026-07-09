@@ -206,3 +206,43 @@ test_that("stage_targets bands and marks every visit to a revisited stage", {
   expect_equal(nrow(res$plot$layers[[fb]]$data), 2L)
   expect_no_warning(ggplot2::ggplot_build(res$plot))
 })
+
+# ── Open (end-inferred) stage: proven breach is drawn, capped at observed data ──
+
+test_that("an open stage draws its proven breach excess, capped at the last observed event", {
+  # TCK-04 is still open: it enters "In Progress" at hour 3 and the data
+  # ends with a comment at hour 5, so the observed dwell is a proven 2h.
+  # A 1h target is therefore visibly breached even though the stage's end
+  # is imputed — and the excess must stop at the last observed instant.
+  res <- suppressMessages(plot_stage_ladder(
+    support_ticket_example, case_id = "TCK-04",
+    stage_categories = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed",
+    stage_targets = c("In Progress" = 1), return_data = TRUE
+  ))
+  fb <- which(vapply(res$plot$layers, function(l) {
+    isTRUE(l$aes_params$colour == "firebrick")
+  }, logical(1)))
+  expect_length(fb, 1L)
+  excess <- res$plot$layers[[fb]]$data
+  expect_equal(nrow(excess), 1L)
+  last_observed <- max(support_ticket_example$timestamp[
+    support_ticket_example$ticket_id == "TCK-04"])
+  expect_equal(excess$xend, last_observed)
+  expect_no_warning(ggplot2::ggplot_build(res$plot))
+})
+
+test_that("an open stage whose observed dwell is within target claims no breach", {
+  # Same case, but a 3h target: only 2h are proven, so nothing is drawn
+  # even though the imputed end might stretch further.
+  p <- suppressMessages(plot_stage_ladder(
+    support_ticket_example, case_id = "TCK-04",
+    stage_categories = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed",
+    stage_targets = c("In Progress" = 3)
+  ))
+  fb <- vapply(p$layers, function(l) {
+    isTRUE(l$aes_params$colour == "firebrick")
+  }, logical(1))
+  expect_false(any(fb))
+})

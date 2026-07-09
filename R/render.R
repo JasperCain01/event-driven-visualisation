@@ -260,8 +260,25 @@ journey_layers <- function(boxes, events, opts) {
   # final box's right edge as open-ended rather than implying its (inferred)
   # xmax is a known, true end. Data-driven (not annotate()) so it faces the
   # correct panel when faceted.
-  if (spell_open && nrow(boxes) > 0) {
+  #
+  # Single-case: opts$spell_open flags the one spell. Cohort: opts$open_cases
+  # lists the case ids whose spell never reached a terminal state, and each
+  # open case's final box gets the marker in its own facet panel.
+  open_cases <- opts$open_cases
+  if (!is.null(facet_by) && facet_by %in% names(boxes) &&
+      length(open_cases) > 0) {
+    final_box <- boxes |>
+      dplyr::filter(.data[[facet_by]] %in% open_cases) |>
+      dplyr::group_by(.data[[facet_by]]) |>
+      dplyr::slice_tail(n = 1) |>
+      dplyr::ungroup()
+  } else if (spell_open && nrow(boxes) > 0) {
     final_box <- dplyr::slice_tail(boxes, n = 1)
+  } else {
+    final_box <- NULL
+  }
+
+  if (!is.null(final_box) && nrow(final_box) > 0) {
     ongoing_label <- dplyr::mutate(final_box, y = box_height * 1.04)
 
     layers <- c(layers, list(

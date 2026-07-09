@@ -32,6 +32,16 @@ packaging-layout corrections:
 * `plot_stage_ladder()` `stage_targets` now bands **every** visit to a
   stage a case re-enters, and draws the firebrick breach excess per visit.
   Previously only the first visit was banded and checked.
+* `plot_stage_ladder()` `stage_targets` now draws the breach excess for an
+  *open* (end-inferred) stage too, whenever the dwell observed up to the
+  last recorded event already exceeds the target — elapsed time is a lower
+  bound, so a visible breach is proven. The excess is capped at the last
+  observed instant, so a median/fixed-imputed end never inflates it.
+  Previously an open stage never showed a breach at all.
+* `plot_journey_cohort()` now draws the `(ongoing)` open-spell marker in
+  the panel of every case that never reaches a `terminal_activities` state
+  (previously deferred), and gains a `tail_strategy` argument forwarded
+  per case, for parity with `plot_patient_journey()`.
 * Packaging: the three example datasets moved to `data/` as lazy-loaded
   `.rda` files built by `data-raw/` scripts (documented in `R/data.R`), as
   the implementation plan's Stage 0 specified; `LICENSE` now uses CRAN's
