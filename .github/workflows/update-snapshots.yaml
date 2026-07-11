@@ -19,11 +19,6 @@
 name: update-snapshots
 on:
   workflow_dispatch: {}
-  # TEMPORARY bootstrap trigger: workflow_dispatch is only available once
-  # this file exists on the default branch, so the first run fires on push
-  # to the branch introducing it. Remove before merging to main.
-  push:
-    branches: [ 'claude/review-implementation-plan-urlsg7' ]
 
 permissions:
   contents: write
@@ -49,9 +44,14 @@ jobs:
 
       - name: Regenerate vdiffr snapshots
         run: |
-          # Failures are expected here when the baselines are stale — the
-          # point of the run is the .new.svg files testthat writes, which
-          # snapshot_accept() then moves over the old baselines.
+          # library() (not just package=) so the lazy-loaded datasets are on
+          # the search path, exactly as tests/testthat.R's test_check() run
+          # has them. Failures are expected here when the baselines are
+          # stale — the point of the run is the .new.svg files testthat
+          # writes, which snapshot_accept() then moves over the old
+          # baselines — so lift the max-failure circuit breaker too.
+          library(eventviz)
+          testthat::set_max_fails(Inf)
           testthat::test_dir("tests/testthat", package = "eventviz",
                              stop_on_failure = FALSE)
           testthat::snapshot_accept(path = "tests/testthat")
