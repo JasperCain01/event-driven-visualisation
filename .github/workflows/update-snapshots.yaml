@@ -1,0 +1,68 @@
+# Maintenance workflow: regenerate the vdiffr visual-regression baselines on
+# the CI graphics stack.
+#
+# The SVG baselines under tests/testthat/_snaps are pixel-exact renders, so
+# they are pinned to the R version + ggplot2/svglite/font stack that produced
+# them. CI tracks R 'release' and current CRAN, which means every meaningful
+# upgrade of that stack changes the rendered SVGs and turns R-CMD-check and
+# test-coverage red with "Snapshot of `testcase` has changed" for every
+# baseline, even though all functional tests pass.
+#
+# When that happens (and only then):
+#   1. Run this workflow (Actions -> update-snapshots -> Run workflow) on a
+#      BRANCH, never on main directly.
+#   2. It re-runs the test suite on the CI runner, accepts the regenerated
+#      snapshots, and pushes a commit to that branch.
+#   3. Visually review every changed image in the PR diff before merging —
+#      a baseline nobody has looked at is worthless.
+
+name: update-snapshots
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-snapshots:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      NOT_CRAN: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: local::.
+          needs: check
+
+      - name: Regenerate vdiffr snapshots
+        run: |
+          # Failures are expected here when the baselines are stale — the
+          # point of the run is the .new.svg files testthat writes, which
+          # snapshot_accept() then moves over the old baselines.
+          testthat::test_dir("tests/testthat", package = "eventviz",
+                             stop_on_failure = FALSE)
+          testthat::snapshot_accept(path = "tests/testthat")
+        shell: Rscript {0}
+
+      - name: Commit refreshed baselines
+        run: |
+          if git diff --quiet -- tests/testthat/_snaps; then
+            echo "No snapshot changes - baselines already match this stack."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/testthat/_snaps
+          git commit \
+            -m "Regenerate vdiffr baselines on the CI graphics stack" \
+            -m "Rendered by the update-snapshots workflow (run ${GITHUB_RUN_ID}) on R release with current CRAN packages. Every image must be visually reviewed before this commit is merged."
+          git push
+        shell: bash

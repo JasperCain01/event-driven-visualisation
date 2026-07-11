@@ -6,10 +6,14 @@
 # static output byte-identical rather than relying on eyeballs.
 #
 # Each baseline was rendered and visually approved once before committing.
-# vdiffr skips gracefully wherever its graphics stack is unavailable (CI on a
-# non-matching svglite/systemfonts, or a machine without vdiffr installed), so
-# these never produce false failures — they only catch genuine drift on a
-# matching runner.
+# The baselines are pixel-exact SVGs, so they are PINNED to the graphics
+# stack that produced them (R version + ggplot2/svglite/fonts): CI is the
+# canonical environment. When CI upgrades R/CRAN and every doppelganger
+# fails with "Snapshot of `testcase` has changed" while the functional
+# tests still pass, the baselines are stale, not the code — run the
+# update-snapshots workflow on a branch to regenerate them on the CI
+# runner, then visually review every image before merging. On machines
+# without vdiffr (or with NOT_CRAN unset) these tests skip.
 #
 # Run with: testthat::test_file("tests/testthat/test-render-snapshots.R")
 
