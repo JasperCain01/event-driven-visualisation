@@ -19,6 +19,12 @@
 name: update-snapshots
 on:
   workflow_dispatch: {}
+  # TEMPORARY bootstrap trigger (see REDESIGN_PLAN.md §9): workflow_dispatch
+  # only works for workflows already on the default branch. This lets the
+  # workflow run once from this branch to regenerate the vdiffr baselines
+  # for the redesign; it is removed again in a follow-up commit.
+  push:
+    branches: [ 'claude/implement-redesign-plan-d9g4mg' ]
 
 permissions:
   contents: write
