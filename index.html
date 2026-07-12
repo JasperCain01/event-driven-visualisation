@@ -11,8 +11,8 @@
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="eventviz: visualise any timestamped event log">
-<meta name="description" content="Visualise any timestamped event log as a location-band timeline, a staircase diagram for linear stage processes, faceted cohort comparisons, or aggregate/statistical summaries. Originally built for patient journeys through clinical locations, but equally suited to any process where a case occupies one exclusive state at a time - a complaint moving through handling stages, a support ticket through statuses, an order through an approval pipeline.">
-<meta property="og:description" content="Visualise any timestamped event log as a location-band timeline, a staircase diagram for linear stage processes, faceted cohort comparisons, or aggregate/statistical summaries. Originally built for patient journeys through clinical locations, but equally suited to any process where a case occupies one exclusive state at a time - a complaint moving through handling stages, a support ticket through statuses, an order through an approval pipeline.">
+<meta name="description" content="Visualise any timestamped event log as a state-band timeline, a staircase diagram for linear stage processes, faceted cohort comparisons, or aggregate/statistical summaries, for any process where a case occupies one exclusive state at a time - a complaint moving through handling stages, a support ticket through statuses, an order through an approval pipeline. The bundled example dataset happens to be a clinical patient journey, but the package itself carries no healthcare-specific defaults or vocabulary.">
+<meta property="og:description" content="Visualise any timestamped event log as a state-band timeline, a staircase diagram for linear stage processes, faceted cohort comparisons, or aggregate/statistical summaries, for any process where a case occupies one exclusive state at a time - a complaint moving through handling stages, a support ticket through statuses, an order through an approval pipeline. The bundled example dataset happens to be a clinical patient journey, but the package itself carries no healthcare-specific defaults or vocabulary.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,7 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>eventviz visualises any timestamped event log — not just clinical data. If your data has a case, a timestamp, and a state that case occupies exclusively over time (a hospital ward, a complaint stage, a support-ticket status, a pipeline step), eventviz turns it into a timeline, a staircase diagram, a faceted cohort comparison, or an aggregate statistical summary, with a colourblind-safe default palette and an interactive tooltip renderer available on request.</p>
+<p>eventviz visualises any timestamped event log. If your data has a case, a timestamp, and a state that case occupies exclusively over time (a complaint stage, a support-ticket status, a pipeline step, a warehouse location), eventviz turns it into a timeline, a staircase diagram, a faceted cohort comparison, or an aggregate statistical summary, with a colourblind-safe default palette and an interactive tooltip renderer available on request.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -71,54 +71,62 @@
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>The package ships <code>example_journey</code>, a synthetic patient spell: Ambulance arrival -&gt; Emergency Department -&gt; Acute Medical Unit -&gt; Discharge Lounge -&gt; Discharged, with clinical point events (observations, tests, doctor reviews) sprinkled throughout.</p>
+<p>Every plot needs exactly one explicit declaration: <code>state_events</code>, the <code>act_type</code> value(s) that open a state. The package ships <code>example_journey</code>, a single-case event log, so this is one call:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jaspercain01.github.io/event-driven-visualisation/">eventviz</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span><span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">example_journey</span>,</span>
+<span>                   state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><img src="reference/figures/README-quick-start-1.png" width="100%"></p>
 <p>Turn on a few opt-in features — duration labels, a target-threshold line, and terminal-state handling so “Discharged” renders as a marker rather than an invented multi-hour stay:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
-<span>  <span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>,</span>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
+<span>  <span class="va">example_journey</span>,</span>
+<span>  state_events         <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
 <span>  show_duration        <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  terminal_activities  <span class="op">=</span> <span class="st">"Discharged"</span>,</span>
 <span>  reference_lines      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>offset_hours <span class="op">=</span> <span class="fl">4</span>, label <span class="op">=</span> <span class="st">"4h target"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="reference/figures/README-quick-start-features-1.png" width="100%"></p>
+<p>If you omit <code>state_events</code>, or point <code>case_id</code> at a case that doesn’t exist, the error tells you what’s actually in your data rather than guessing at it.</p>
 </div>
 <div class="section level2">
-<h2 id="not-just-healthcare">Not just healthcare<a class="anchor" aria-label="anchor" href="#not-just-healthcare"></a>
+<h2 id="same-api-any-domain">Same API, any domain<a class="anchor" aria-label="anchor" href="#same-api-any-domain"></a>
 </h2>
-<p>Two more example datasets prove the package generalises past clinical spells: <code>complaint_example</code> (an NHS complaint moving through fixed stages, with no patient column at all) and <code>support_ticket_example</code> (a software support ticket lifecycle — deliberately outside the healthcare sector entirely).</p>
-<p>For a strictly linear process like these, <code><a href="reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> answers “where does the time go” by putting the stage on the y-axis instead of x, so the case walks down-and-right like a Gantt chart:</p>
+<p><code>complaint_example</code> and <code>support_ticket_example</code> run through the exact same functions — no domain-specific arguments, just different column mappings and <code>state_events</code> values.</p>
+<p>For a strictly linear process, <code><a href="reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> answers “where does the time go” by putting the state on the y-axis instead of x, so the case walks down-and-right like a Gantt chart:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/plot_stage_ladder.html">plot_stage_ladder</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-03"</span>,</span>
-<span>  stage_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  stage_targets    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Under review"</span> <span class="op">=</span> <span class="fl">24</span> <span class="op">*</span> <span class="fl">7</span><span class="op">)</span>   <span class="co"># a one-week target</span></span>
+<span>  state_events  <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
+<span>  stage_targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Under review"</span> <span class="op">=</span> <span class="fl">24</span> <span class="op">*</span> <span class="fl">7</span><span class="op">)</span>   <span class="co"># a one-week target</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="reference/figures/README-staircase-1.png" width="100%"></p>
-<p><code><a href="reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> compares several cases at once as small multiples, and <code>state_label</code> relabels the fill legend for a non-spatial process:</p>
+<p><code><a href="reference/plot_cohort_timeline.html">plot_cohort_timeline()</a></code> compares several cases at once as small multiples, and <code>state_label</code> relabels the fill legend for a non-spatial process:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_journey_cohort.html">plot_journey_cohort</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_cohort_timeline.html">plot_cohort_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">support_ticket_example</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"status_change"</span>, case_col <span class="op">=</span> <span class="st">"ticket_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Closed"</span>, state_label <span class="op">=</span> <span class="st">"Status"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"status_change"</span>, case_col <span class="op">=</span> <span class="st">"ticket_id"</span>,</span>
+<span>  terminal_activities <span class="op">=</span> <span class="st">"Closed"</span>, state_label <span class="op">=</span> <span class="st">"Status"</span>,</span>
 <span>  case_ids <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"TCK-02"</span>, <span class="st">"TCK-05"</span>, <span class="st">"TCK-06"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="reference/figures/README-cohort-1.png" width="100%"></p>
+</div>
+<div class="section level2">
+<h2 id="bring-your-own-data">Bring your own data<a class="anchor" aria-label="anchor" href="#bring-your-own-data"></a>
+</h2>
+<p>If your column names don’t match the defaults, either pass them explicitly (<code>time_col</code>, <code>case_col</code>, <code>act_type_col</code>, <code>activity_col</code>) or let <code>schema = "auto"</code> detect them for you. If your data is wide (one row per case, one column per milestone timestamp), <code><a href="reference/pivot_events_longer.html">pivot_events_longer()</a></code> reshapes it into the long form every plotting function expects — its output feeds <code>state_events = "state_change"</code> directly, no translation needed. See <code><a href="articles/adapting-your-data.html">vignette("adapting-your-data")</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
 </h2>
 <ul>
 <li>
-<code><a href="articles/getting-started.html">vignette("getting-started")</a></code> — the full clinical walkthrough</li>
+<code><a href="articles/getting-started.html">vignette("getting-started")</a></code> — the full walkthrough on the bundled <code>example_journey</code> dataset</li>
 <li>
 <code><a href="articles/adapting-your-data.html">vignette("adapting-your-data")</a></code> — schema autodetection and the wide-to-long pivot wrapper, for bringing your own data</li>
 <li>
-<code><a href="articles/linear-processes.html">vignette("linear-processes")</a></code> — band vs. staircase for complaints and tickets, and per-stage targets</li>
+<code><a href="articles/linear-processes.html">vignette("linear-processes")</a></code> — band vs. staircase for complaints and tickets, and per-state targets</li>
 <li>
 <code><a href="articles/cohort-analysis.html">vignette("cohort-analysis")</a></code> — facets plus aggregate/breach/transition summaries across a cohort</li>
 </ul>

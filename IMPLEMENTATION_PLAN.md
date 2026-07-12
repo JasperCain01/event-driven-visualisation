@@ -69,10 +69,8 @@ pattern.
     cohort comparison uses
     [`ggplot2::facet_wrap()`](https://ggplot2.tidyverse.org/reference/facet_wrap.html).
 
-2.  **Cohort view is a new function**,
-    [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md),
-    not an overload of `case_id` inside
-    [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md).
+2.  **Cohort view is a new function**, `plot_journey_cohort()`, not an
+    overload of `case_id` inside `plot_patient_journey()`.
 
 3.  **Interactive renderer uses `ggiraph`, not `plotly`** — it decorates
     existing ggplot2 geoms rather than translating the whole plot.
@@ -262,9 +260,8 @@ layer collisions).
 - Add `format_duration(secs)` to `utils.R`: `< 60` → `"Ns"`; `< 3600` →
   `"Nm"`; `< 86400` → `"Hh Mm"` (drop zero minutes); `>= 86400` →
   `"Dd Hh"`.
-- Add `show_duration = FALSE` to
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md),
-  thread through `opts`.
+- Add `show_duration = FALSE` to `plot_patient_journey()`, thread
+  through `opts`.
 - When `TRUE`: `geom_text()` on non-terminal boxes,
   `x = xmin_render + (xmax_render - xmin_render)/2`,
   **`y = box_height * 1.04`, vjust 0** (layout budget row 3 — NOT
@@ -444,9 +441,8 @@ pivot_events_longer(
     `"arrival_time"` → `"Arrival"`, not `"Arrival Time"`.
 8.  Drop `.milestone`; column order: case, patient (if given), time,
     act_type, activity, then passthrough columns.
-9.  Output must feed
-    [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-    directly with matching col args.
+9.  Output must feed `plot_patient_journey()` directly with matching col
+    args.
 
 **Tests (`test-pivot.R`):** - Fixture: 3 cases, cols `case_id`,
 `patient_id`, `arrival_time`, `triage_time`, `ward_time`,
@@ -510,12 +506,10 @@ abort naming them, the columns tried, and the
 escape hatch. 5. On success, `cli_inform` one line per field, stating
 exact vs fuzzy.
 
-**Wiring into
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md):**
-`schema = NULL` param. Precedence per field, highest wins: explicit
-individual argument → schema field → current hardcoded default.
-Autodetect ONLY on the explicit sentinel `schema = "auto"` — never
-silently.
+**Wiring into `plot_patient_journey()`:** `schema = NULL` param.
+Precedence per field, highest wins: explicit individual argument →
+schema field → current hardcoded default. Autodetect ONLY on the
+explicit sentinel `schema = "auto"` — never silently.
 
 **Tests:** construction/print; fuzzy recovery on a renamed
 `example_journey`; tie → abort; nonsense columns → abort naming roles;
@@ -593,9 +587,8 @@ elapsed-hours axis. Refactor FIRST:
 - Gate: all vdiffr baselines unchanged after the refactor. Only then
   build the cohort function.
 
-**[`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md)**
-as revision 1 (`case_ids = NULL` → all; per-case
-`validate_event_log()` + `build_journey_tables()` reuse — never
+**`plot_journey_cohort()`** as revision 1 (`case_ids = NULL` → all;
+per-case `validate_event_log()` + `build_journey_tables()` reuse — never
 duplicate; bind with a `case_id` column;
 `facet_wrap(~case_id, scales = "free_x", ncol = ncol)` for absolute
 time; `align_start = TRUE` rebases each case to its first move and uses
@@ -648,10 +641,10 @@ this dataset deliberately exercises `patient_col = NULL`.
 
 ### 5b-2. Legend/vocabulary fit
 
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-gains `state_label = "Location"` — the fill legend title (a complaint’s
-stages are not “Locations”). Single string param, threaded through
-`opts` to `scale_fill_manual(name = state_label)`. Default unchanged.
+`plot_patient_journey()` gains `state_label = "Location"` — the fill
+legend title (a complaint’s stages are not “Locations”). Single string
+param, threaded through `opts` to
+`scale_fill_manual(name = state_label)`. Default unchanged.
 
 ### 5b-3. `plot_stage_ladder()` — the staircase view
 
@@ -696,9 +689,7 @@ plot_stage_ladder(
 respects `stage_order` and errors on unknown stage names; duration
 labels present; `stage_targets` adds exactly one band layer per targeted
 stage; terminal stage renders as point; end-to-end on
-`complaint_example` for BOTH
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-(band) and
+`complaint_example` for BOTH `plot_patient_journey()` (band) and
 [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md)
 (staircase); the still-open complaint shows the 1c ongoing treatment.
 
@@ -726,12 +717,10 @@ tail- imputation rendering convenience.
 
 ### 6a. Duration summaries
 
-[`summarise_journey_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_journey_durations.md)
-(one row per stay: case_id, location, xmin, xmax, duration_secs,
-end_inferred, terminal) and
-[`summarise_stage_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_stage_durations.md)
-(per location: n_cases, mean/median/p25/p75 secs, n_inferred_excluded)
-built on it.
+`summarise_journey_durations()` (one row per stay: case_id, location,
+xmin, xmax, duration_secs, end_inferred, terminal) and
+`summarise_stage_durations()` (per location: n_cases,
+mean/median/p25/p75 secs, n_inferred_excluded) built on it.
 
 ### 6b. Breach rates — per-stage, not whole-spell
 
@@ -817,11 +806,9 @@ roxygen edits.
     comment_added/priority_changed/reassigned/sla_warning). The
     complaint data (5b) is still NHS-adjacent; tickets prove the package
     leaves the sector entirely. Exercised end-to-end through
-    [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-    (with `state_label = "Status"`),
+    `plot_patient_journey()` (with `state_label = "Status"`),
     [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md),
-    and
-    [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md).
+    and `plot_journey_cohort()`.
 2.  **Extract `theme_journey(base_size = 11)`** into `R/theme.R`, used
     by both renderers. Byte-identical output — vdiffr baselines are the
     gate.
@@ -831,9 +818,8 @@ roxygen edits.
     would break every earlier stage for zero functional gain.
 
 **Definition of done** - \[ \] Ticket dataset end-to-end through all
-three plotting functions - \[ \]
-[`theme_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/theme_journey.md)
-extracted, baselines unchanged - \[ \] Docs de-hospitalised
+three plotting functions - \[ \] `theme_journey()` extracted, baselines
+unchanged - \[ \] Docs de-hospitalised
 
 ------------------------------------------------------------------------
 
@@ -843,11 +829,9 @@ extracted, baselines unchanged - \[ \] Docs de-hospitalised
 visual-baseline work that made revision 1’s version of this stage 🔴
 moved to Stage 1.5)
 
-1.  Direct tests for
-    [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-    orchestration not covered by `test-fixes.R`: auto-title format,
-    `exclude_categories` row counts, `return_data` shape incl. Stage
-    6d’s `summary`.
+1.  Direct tests for `plot_patient_journey()` orchestration not covered
+    by `test-fixes.R`: auto-title format, `exclude_categories` row
+    counts, `return_data` shape incl. Stage 6d’s `summary`.
 2.  vdiffr snapshots for everything built after Stage 1.5 that lacks one
     (lanes, cohort both modes, ladder, tickets) — frontier-approved like
     the originals.

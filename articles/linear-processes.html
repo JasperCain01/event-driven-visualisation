@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,8 +73,8 @@
 through fixed handling stages; a support ticket moves through fixed
 statuses; a purchase order moves through fixed approval steps. None of
 these cases occupy a physical <em>location</em> — but each occupies
-exactly one <em>stage</em> exclusively at a time, which is exactly the
-structure <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>’s box derivation was built
+exactly one <em>state</em> exclusively at a time, which is exactly the
+structure <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>’s box derivation was built
 for. This vignette uses the bundled <code>complaint_example</code> and
 <code>support_ticket_example</code> datasets to show both ways of
 visualising a linear process, and when to reach for each.</p>
@@ -84,8 +84,7 @@ visualising a linear process, and when to reach for each.</p>
 <p><code>complaint_example</code> has eight complaints moving through
 Acknowledgement -&gt; Triage -&gt; Assigned -&gt; Under review -&gt;
 Senior review -&gt; Formal letter sent, recorded as
-<code>act_type = "stage_change"</code>, with no patient column at
-all:</p>
+<code>act_type = "stage_change"</code>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">complaint_example</span><span class="op">)</span></span>
 <span><span class="co">#&gt;   complaint_id           timestamp          act_type                  activity</span></span>
@@ -98,42 +97,41 @@ all:</p>
 <p><code>support_ticket_example</code> is the same shape for a
 support-ticket lifecycle (Open -&gt; Assigned -&gt; In Progress -&gt;
 Waiting on Customer -&gt; Resolved -&gt; Closed) — deliberately
-non-healthcare, to prove the package isn’t NHS-specific.</p>
+non-healthcare, to prove the package isn’t tied to any one domain.</p>
 </div>
 <div class="section level2">
 <h2 id="band-layout-what-happened-when">Band layout: “what happened when”<a class="anchor" aria-label="anchor" href="#band-layout-what-happened-when"></a>
 </h2>
-<p><code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> works unmodified —
+<p><code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code> works unmodified —
 <code>stage_change</code>/<code>status_change</code> plays the role
-<code>location_move</code> usually plays,
-<code>patient_col = NULL</code> because there’s no secondary identifier,
-and <code>state_label</code> relabels the fill legend from “Location” to
+<code>location_move</code> usually plays via <code>state_events</code>,
+and <code>state_label</code> relabels the fill legend from “State” to
 something that fits:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-01"</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
+<span>  terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
 <span>  state_label <span class="op">=</span> <span class="st">"Stage"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="linear-processes_files/figure-html/band-1.png" class="r-plt" alt="" width="768"></p>
 <p>This is the right view for “what happened, and when” — the point
 events (<code>contact</code>, <code>escalation</code>,
-<code>evidence_received</code>) sit on the timeline exactly as clinical
-point events would.</p>
+<code>evidence_received</code>) sit on the timeline exactly like any
+other point event.</p>
 </div>
 <div class="section level2">
 <h2 id="staircase-layout-where-does-the-time-go">Staircase layout: “where does the time go”<a class="anchor" aria-label="anchor" href="#staircase-layout-where-does-the-time-go"></a>
 </h2>
 <p>For a linear process, the more compelling question is usually
 <em>where the time goes</em> — which stage is eating the SLA.
-<code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> puts stage on the y-axis (first stage
-at the top) and draws one horizontal segment per stage, so the case
-walks down-and-right like a Gantt chart:</p>
+<code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> puts the state on the y-axis (first
+stage at the top) and draws one horizontal segment per stage, so the
+case walks down-and-right like a Gantt chart:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_stage_ladder.html">plot_stage_ladder</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-01"</span>,</span>
-<span>  stage_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="linear-processes_files/figure-html/ladder-1.png" class="r-plt" alt="" width="768"></p>
 <p>Compare a complaint that stalls for weeks in one stage — the
@@ -142,7 +140,7 @@ layout’s uniform box heights don’t:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_stage_ladder.html">plot_stage_ladder</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-03"</span>,</span>
-<span>  stage_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="linear-processes_files/figure-html/ladder-stalled-1.png" class="r-plt" alt="" width="768"></p>
 <div class="section level3">
@@ -154,7 +152,7 @@ targeted stage’s row, with any dwell beyond it redrawn in firebrick:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_stage_ladder.html">plot_stage_ladder</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-03"</span>,</span>
-<span>  stage_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
 <span>  stage_targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Under review"</span> <span class="op">=</span> <span class="fl">24</span> <span class="op">*</span> <span class="fl">7</span><span class="op">)</span>   <span class="co"># one week</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="linear-processes_files/figure-html/ladder-targets-1.png" class="r-plt" alt="" width="768"></p>
@@ -165,17 +163,17 @@ targeted stage’s row, with any dwell beyond it redrawn in firebrick:</p>
 </h2>
 <p><code>support_ticket_example</code>’s <code>"TCK-04"</code> never
 reaches <code>"Closed"</code> — the data feed simply stops. Passing
-<code>terminal_activities</code> tells
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> what “done” looks like, so it can
-tell the difference between a completed spell and one still in flight; a
-case that hasn’t reached a terminal state gets its final box drawn open
-(a dashed edge with an italic <code>"(ongoing)"</code> label) instead of
-silently inventing an end for it:</p>
+<code>terminal_activities</code> tells <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>
+what “done” looks like, so it can tell the difference between a
+completed case and one still in flight; a case that hasn’t reached a
+terminal state gets its final box drawn open (a dashed edge with an
+italic <code>"(ongoing)"</code> label) instead of silently inventing an
+end for it:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">support_ticket_example</span>, case_id <span class="op">=</span> <span class="st">"TCK-04"</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"status_change"</span>, case_col <span class="op">=</span> <span class="st">"ticket_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Closed"</span>, state_label <span class="op">=</span> <span class="st">"Status"</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"status_change"</span>, case_col <span class="op">=</span> <span class="st">"ticket_id"</span>,</span>
+<span>  terminal_activities <span class="op">=</span> <span class="st">"Closed"</span>, state_label <span class="op">=</span> <span class="st">"Status"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="linear-processes_files/figure-html/ongoing-1.png" class="r-plt" alt="" width="768"></p>
 </div>
@@ -184,8 +182,8 @@ silently inventing an end for it:</p>
 </h2>
 <ul>
 <li>
-<strong>Band layout</strong> (<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>)
-when you want the point events on the same timeline as the stage moves,
+<strong>Band layout</strong> (<code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>)
+when you want the point events on the same timeline as the state moves,
 or you’re comparing this process against genuinely spatial ones in the
 same report.</li>
 <li>

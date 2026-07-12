@@ -1,0 +1,127 @@
+# Visualise several cases as a faceted small-multiples grid
+
+Lays several cases out one facet panel per case, via
+\[ggplot2::facet_wrap()\], so a cohort can be compared at a glance.
+Every case is run through the same validate + derive pipeline
+\[plot_case_timeline()\] uses, so per-state colours stay consistent
+across panels.
+
+## Usage
+
+``` r
+plot_cohort_timeline(
+  data,
+  state_events,
+  case_ids = NULL,
+  time_col = "timestamp",
+  act_type_col = "act_type",
+  activity_col = "activity",
+  case_col = "case_id",
+  schema = NULL,
+  tz = "UTC",
+  terminal_activities = NULL,
+  exclude_categories = NULL,
+  tail_strategy = "last_event",
+  align_start = FALSE,
+  ncol = NULL,
+  max_cases = 25L,
+  show_duration = FALSE,
+  label_boxes = FALSE,
+  event_type_top_n = NULL,
+  state_label = "State",
+  state_palette = NULL,
+  event_palette = NULL,
+  palette_style = c("okabe", "brewer"),
+  box_height = 0.25,
+  box_gap_prop = 0.003,
+  title = NULL,
+  return_data = FALSE
+)
+```
+
+## Arguments
+
+- data:
+
+  A data frame or tibble containing the event log for the whole cohort.
+
+- state_events:
+
+  Character vector of \`act_type\` values that open a state. Required —
+  no default; see \[plot_case_timeline()\] for the discovery-error
+  behaviour when omitted.
+
+- case_ids:
+
+  Character vector of cases to plot, or \`NULL\` (default) to plot every
+  case in \`data\`, subject to \`max_cases\`.
+
+- time_col, act_type_col, activity_col, case_col:
+
+  Column-name mappings, as in \[plot_case_timeline()\]. \`case_col\` is
+  required for a cohort (it cannot be \`NULL\` — a cohort needs a case
+  column).
+
+- schema:
+
+  An \[event_log_schema()\] object, the literal string \`"auto"\`, or
+  \`NULL\` — see \[plot_case_timeline()\].
+
+- tz:
+
+  Timezone used when parsing character timestamps.
+
+- terminal_activities:
+
+  Character vector of terminal \`activity\` values. A case whose series
+  never reaches one renders with the \`(ongoing)\` open-case marker in
+  its own panel.
+
+- exclude_categories:
+
+  Character vector of \`act_type\` values to drop before plotting, or
+  \`NULL\`.
+
+- tail_strategy:
+
+  Strategy for inferring each case's final box end time, as in
+  \[plot_case_timeline()\].
+
+- align_start:
+
+  Logical. \`FALSE\` (default) compares cases on absolute time (free
+  per-panel x range); \`TRUE\` rebases each case to its first state
+  event and compares them on one shared elapsed-hours axis.
+
+- ncol:
+
+  Number of facet columns, or \`NULL\` to let \`facet_wrap()\` choose.
+
+- max_cases:
+
+  Guard against faceting too many cases at once (a hang, not a plot);
+  aborts with advice to pass explicit \`case_ids\` if exceeded.
+
+- show_duration, label_boxes, event_type_top_n, state_label,
+  state_palette, event_palette, palette_style, box_height, box_gap_prop,
+  title:
+
+  Passthrough render options mirroring \[plot_case_timeline()\].
+
+- return_data:
+
+  Logical; if \`TRUE\`, return \`list(plot, boxes, events)\` instead of
+  just the plot.
+
+## Value
+
+A \`ggplot\` object, or a list when \`return_data = TRUE\`.
+
+## Examples
+
+``` r
+plot_cohort_timeline(complaint_example, case_col = "complaint_id",
+                     state_events = "stage_change",
+                     case_ids = c("CMP-01", "CMP-02"))
+
+```

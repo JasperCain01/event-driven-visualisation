@@ -1,4 +1,4 @@
-# Summarise directed location-to-location transitions across a cohort
+# Summarise directed state-to-state transitions across a cohort
 
 For each case, consecutive stays (ordered by entry time) form a from -\>
 to pair; the dwell of that transition is the time spent in the "from"
@@ -12,13 +12,13 @@ excludes anything here).
 ``` r
 summarise_transitions(
   data,
+  state_events,
   case_ids = NULL,
-  location_categories = c("location_move", "ed_location_move"),
   time_col = "timestamp",
   act_type_col = "act_type",
   activity_col = "activity",
-  case_col = "caseID",
-  patient_col = NULL,
+  case_col = "case_id",
+  schema = NULL,
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
@@ -33,19 +33,26 @@ summarise_transitions(
 
   A data frame or tibble containing the event log for the whole cohort.
 
+- state_events:
+
+  Character vector of \`act_type\` values that open a state. Required —
+  no default; see \[plot_case_timeline()\] for the discovery-error
+  behaviour when omitted.
+
 - case_ids:
 
   Character vector of cases to include, or \`NULL\` (default) for every
   case in \`data\`.
 
-- location_categories:
+- time_col, act_type_col, activity_col, case_col:
 
-  Character vector of \`act_type\` values that mark a location/state
-  move.
+  Column-name mappings, as in \[plot_case_timeline()\]. \`case_col\` is
+  required (it cannot be \`NULL\` — a cohort needs a case column).
 
-- time_col, act_type_col, activity_col, case_col, patient_col:
+- schema:
 
-  Column-name mappings, as in \[plot_patient_journey()\].
+  An \[event_log_schema()\] object, the literal string \`"auto"\`, or
+  \`NULL\` — see \[plot_case_timeline()\].
 
 - tz:
 
@@ -73,19 +80,19 @@ summarise_transitions(
 
 ## Value
 
-A tibble (\`from_location\`, \`to_location\`, \`n\`,
-\`mean_dwell_secs\`, \`median_dwell_secs\`), one row per distinct
-ordered pair, sorted by descending \`n\`.
+A tibble (\`from_state\`, \`to_state\`, \`n\`, \`mean_dwell_secs\`,
+\`median_dwell_secs\`), one row per distinct ordered pair, sorted by
+descending \`n\`.
 
 ## Examples
 
 ``` r
 summarise_transitions(
   complaint_example, case_col = "complaint_id",
-  location_categories = "stage_change", patient_col = NULL
+  state_events = "stage_change"
 )
 #> # A tibble: 5 × 5
-#>   from_location   to_location            n mean_dwell_secs median_dwell_secs
+#>   from_state      to_state               n mean_dwell_secs median_dwell_secs
 #>   <chr>           <chr>              <int>           <dbl>             <dbl>
 #> 1 Acknowledgement Triage                 8         108000              86400
 #> 2 Assigned        Under review           8          97200              86400

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,23 +39,103 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="eventviz-020">eventviz 0.2.0<a class="anchor" aria-label="anchor" href="#eventviz-020"></a></h2>
+<p>A generic-core redesign: a first-time user with any timestamped event log now gets a correct plot in one call, with exactly one explicit declaration (<code>state_events</code> — which event types open a state) and no healthcare vocabulary anywhere in the API surface. The package has no users yet, so this is a clean break: no deprecation shims, no compatibility aliases.</p>
+<div class="section level3">
+<h3 id="renames-0-2-0">Renames<a class="anchor" aria-label="anchor" href="#renames-0-2-0"></a></h3>
+<table class="table"><colgroup><col width="50%"><col width="50%"></colgroup><thead><tr><th>Old</th>
+<th>New</th>
+</tr></thead><tbody><tr><td><code>plot_patient_journey()</code></td>
+<td><code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code></td>
+</tr><tr><td><code>plot_journey_cohort()</code></td>
+<td><code><a href="../reference/plot_cohort_timeline.html">plot_cohort_timeline()</a></code></td>
+</tr><tr><td><code>summarise_journey_durations()</code></td>
+<td><code><a href="../reference/summarise_case_durations.html">summarise_case_durations()</a></code></td>
+</tr><tr><td><code>summarise_stage_durations()</code></td>
+<td><code><a href="../reference/summarise_state_durations.html">summarise_state_durations()</a></code></td>
+</tr><tr><td><code>plot_journey_with_summary()</code></td>
+<td><code><a href="../reference/plot_case_timeline_with_summary.html">plot_case_timeline_with_summary()</a></code></td>
+</tr><tr><td><code>theme_journey()</code></td>
+<td><code><a href="../reference/theme_timeline.html">theme_timeline()</a></code></td>
+</tr><tr><td>argument <code>location_categories</code> / <code>stage_categories</code>
+</td>
+<td>
+<code>state_events</code> (every function; <strong>required, no default</strong>)</td>
+</tr><tr><td>argument <code>patient_col</code>
+</td>
+<td>
+<strong>deleted</strong> (every function)</td>
+</tr><tr><td>argument <code>location_palette</code>
+</td>
+<td><code>state_palette</code></td>
+</tr><tr><td>argument default <code>state_label = "Location"</code>
+</td>
+<td><code>state_label = "State"</code></td>
+</tr><tr><td>argument default <code>case_col = "caseID"</code>
+</td>
+<td><code>case_col = "case_id"</code></td>
+</tr><tr><td>pivot argument <code>location_cols</code>
+</td>
+<td><code>state_cols</code></td>
+</tr><tr><td>pivot emitted <code>act_type</code> value <code>"location_move"</code>
+</td>
+<td><code>"state_change"</code></td>
+</tr><tr><td>schema field <code>location_categories</code>
+</td>
+<td><code>state_events</code></td>
+</tr><tr><td>schema field <code>patient_col</code>
+</td>
+<td><strong>deleted</strong></td>
+</tr><tr><td>output columns <code>location</code> / <code>from_location</code> / <code>to_location</code>
+</td>
+<td>
+<code>state</code> / <code>from_state</code> / <code>to_state</code>
+</td>
+</tr><tr><td>
+<code><a href="../reference/summarise_breach_rate.html">summarise_breach_rate()</a></code> <code>scope = "spell"</code>
+</td>
+<td><code>scope = "case"</code></td>
+</tr></tbody></table><p><code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code>’s <code>stage_order</code> keeps its name; <code><a href="../reference/plot_transition_summary.html">plot_transition_summary()</a></code>, <code><a href="../reference/summarise_breach_rate.html">summarise_breach_rate()</a></code>, <code><a href="../reference/summarise_transitions.html">summarise_transitions()</a></code>, and <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code>/ <code><a href="../reference/autodetect_schema.html">autodetect_schema()</a></code> keep their names.</p>
+</div>
+<div class="section level3">
+<h3 id="new-case-resolution-rules-0-2-0">New case-resolution rules<a class="anchor" aria-label="anchor" href="#new-case-resolution-rules-0-2-0"></a></h3>
+<ul><li>
+<code>state_events</code> has no default anywhere. Omitting it aborts with an error listing the distinct <code>act_type</code> values present in your data (with row counts) so you can see what to pass — this listing <em>is</em> the discovery mechanism; there is no value-level autodetection.</li>
+<li>
+<code>case_id = NULL</code> (the new default) resolves to the column’s only value when there is exactly one case, informing you which one was used; with more than one case it aborts, naming the first 10 and pointing at <code><a href="../reference/plot_cohort_timeline.html">plot_cohort_timeline()</a></code>.</li>
+<li>
+<code>case_col = NULL</code> treats the whole data frame as a single unnamed series (<code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code> and <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> only — a cohort or a summariser still needs a case column).</li>
+<li>
+<code>schema</code> (<code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> / <code><a href="../reference/autodetect_schema.html">autodetect_schema()</a></code> / <code>schema = "auto"</code>) is now accepted by every cohort/aggregate function, closing a 0.1.0 gap where only the main plotting function did.</li>
+<li>The multi-patient-per-case warning is gone along with the <code>patient_col</code> concept it existed to check.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="vocabulary-0-2-0">Vocabulary<a class="anchor" aria-label="anchor" href="#vocabulary-0-2-0"></a></h3>
+<p>The concept formerly called “location” (a box on the timeline, a rung on the ladder) is now uniformly the <strong>state</strong>: an exclusive condition a case occupies for an interval, opened by an event in <code>state_events</code> and closed by the next such event — see <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>’s <code>@details</code> for the exclusivity/contiguity semantics. The synthetic leading box for events before the first state event is now labelled <code>"(before first state)"</code> (was <code>"(pre-admission)"</code>). Auto-generated titles are always <code>"Case &lt;id&gt;"</code> (no title at all when <code>case_col = NULL</code>).</p>
+</div>
+<div class="section level3">
+<h3 id="datasets-0-2-0">Datasets<a class="anchor" aria-label="anchor" href="#datasets-0-2-0"></a></h3>
+<p><code>example_journey</code>’s <code>caseID</code> column is renamed <code>case_id</code>, and its <code>K_Number</code> column is dropped entirely — the secondary-identifier concept it represented no longer exists. <code>complaint_example</code> and <code>support_ticket_example</code> are unchanged.</p>
+</div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="eventviz-010">eventviz 0.1.0<a class="anchor" aria-label="anchor" href="#eventviz-010"></a></h2>
 <p>Initial release. Turns the original single-file patient-journey timeline script into a general-purpose event-log visualisation package: location-band timelines, staircase stage diagrams for location-less linear processes, cohort facets, aggregate/statistical summaries, an interactive renderer, and three example datasets spanning healthcare, complaints, and support tickets.</p>
 <div class="section level3">
 <h3 id="post-implementation-review-fixes-0-1-0">Post-implementation review fixes<a class="anchor" aria-label="anchor" href="#post-implementation-review-fixes-0-1-0"></a></h3>
 <p>Four defects found in an executed review of the completed stages, plus packaging-layout corrections:</p>
 <ul><li>
-<code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> (absolute-time mode) now sizes the cosmetic inter-box gap — and each box’s minimum render width — against each facet panel’s own time span instead of the whole cohort’s calendar span. Previously, a cohort whose cases were months apart rendered every box at many times its true width. Axis-break selection likewise now sees the widest single panel, giving per-panel time labels instead of one break sized for the whole calendar range. The <code>cohort-absolute</code> vdiffr baseline was re-rendered and visually re-approved for this change.</li>
+<code>plot_journey_cohort()</code> (absolute-time mode) now sizes the cosmetic inter-box gap — and each box’s minimum render width — against each facet panel’s own time span instead of the whole cohort’s calendar span. Previously, a cohort whose cases were months apart rendered every box at many times its true width. Axis-break selection likewise now sees the widest single panel, giving per-panel time labels instead of one break sized for the whole calendar range. The <code>cohort-absolute</code> vdiffr baseline was re-rendered and visually re-approved for this change.</li>
 <li>
-<code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> with <code>event_type_top_n</code>: the <code>"Other"</code> bucket now receives a colour from the event palette. Previously the cohort palette was built over the raw (unbucketed) event types, so <code>"Other"</code> silently fell back to the grey <code>na.value</code>.</li>
+<code>plot_journey_cohort()</code> with <code>event_type_top_n</code>: the <code>"Other"</code> bucket now receives a colour from the event palette. Previously the cohort palette was built over the raw (unbucketed) event types, so <code>"Other"</code> silently fell back to the grey <code>na.value</code>.</li>
 <li>
-<code><a href="../reference/plot_journey_with_summary.html">plot_journey_with_summary()</a></code> now derives the bar-chart colours from the exact fill levels the timeline used (including any synthetic <code>"(pre-admission)"</code> box) and honours <code>palette_style</code>/<code>location_palette</code> passed through <code>...</code>. Previously the bars rebuilt their palette over a different level set, shifting every hue by one position whenever the two differed.</li>
+<code>plot_journey_with_summary()</code> now derives the bar-chart colours from the exact fill levels the timeline used (including any synthetic <code>"(pre-admission)"</code> box) and honours <code>palette_style</code>/<code>location_palette</code> passed through <code>...</code>. Previously the bars rebuilt their palette over a different level set, shifting every hue by one position whenever the two differed.</li>
 <li>
 <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> <code>stage_targets</code> now bands <strong>every</strong> visit to a stage a case re-enters, and draws the firebrick breach excess per visit. Previously only the first visit was banded and checked.</li>
 <li>
 <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> <code>stage_targets</code> now draws the breach excess for an <em>open</em> (end-inferred) stage too, whenever the dwell observed up to the last recorded event already exceeds the target — elapsed time is a lower bound, so a visible breach is proven. The excess is capped at the last observed instant, so a median/fixed-imputed end never inflates it. Previously an open stage never showed a breach at all.</li>
 <li>
-<code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> now draws the <code>(ongoing)</code> open-spell marker in the panel of every case that never reaches a <code>terminal_activities</code> state (previously deferred), and gains a <code>tail_strategy</code> argument forwarded per case, for parity with <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>.</li>
+<code>plot_journey_cohort()</code> now draws the <code>(ongoing)</code> open-spell marker in the panel of every case that never reaches a <code>terminal_activities</code> state (previously deferred), and gains a <code>tail_strategy</code> argument forwarded per case, for parity with <code>plot_patient_journey()</code>.</li>
 <li>Packaging: the three example datasets moved to <code>data/</code> as lazy-loaded <code>.rda</code> files built by <code>data-raw/</code> scripts (documented in <code>R/data.R</code>), as the implementation plan’s Stage 0 specified; <code>LICENSE</code> now uses CRAN’s two-line form with the full text in <code>LICENSE.md</code>; <code>.Rbuildignore</code> patterns are anchored; <code>DESCRIPTION</code> declares <code>ggplot2 (&gt;= 3.4.0)</code> (needed for <code>scale_linewidth_continuous()</code>) and <code>R (&gt;= 3.5)</code>.</li>
 </ul></div>
 <div class="section level3">
@@ -65,7 +145,7 @@
 </ul></div>
 <div class="section level3">
 <h3 id="stage--test-gap-closing--internal-cleanup-0-1-0">Stage 9 — Test gap-closing &amp; internal cleanup<a class="anchor" aria-label="anchor" href="#stage--test-gap-closing--internal-cleanup-0-1-0"></a></h3>
-<ul><li>Added direct tests for <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>’s own orchestration logic that nothing else exercised: auto-generated title format (with and without <code>patient_col</code>, and explicit-title override), <code>exclude_categories</code> row-count accounting (the drop message, the no-op case, and the abort when every location event is removed), and the full <code>return_data = TRUE</code> shape (<code>list(plot, boxes, events, summary)</code>, checked against <code><a href="../reference/summarise_journey_durations.html">summarise_journey_durations()</a></code> for the same case).</li>
+<ul><li>Added direct tests for <code>plot_patient_journey()</code>’s own orchestration logic that nothing else exercised: auto-generated title format (with and without <code>patient_col</code>, and explicit-title override), <code>exclude_categories</code> row-count accounting (the drop message, the no-op case, and the abort when every location event is removed), and the full <code>return_data = TRUE</code> shape (<code>list(plot, boxes, events, summary)</code>, checked against <code>summarise_journey_durations()</code> for the same case).</li>
 <li>Added the vdiffr baseline <code>support_ticket_example</code> was still missing (lanes/cohort/ladder already had one from their own stages).</li>
 <li>Internal: <code>derive_point_events()</code> now returns <code>list(events, pre_box)</code> instead of attaching the synthetic pre-admission box as an <code>attr(events, "pre_box")</code> attribute that happened to survive only because dplyr preserves unknown attributes through <code>mutate()</code>. Behaviour unchanged.</li>
 <li>Wired <code>covr</code>/Codecov into CI (<code>test-coverage.yaml</code>), targeting 85% project coverage.</li>
@@ -73,28 +153,28 @@
 </ul></div>
 <div class="section level3">
 <h3 id="stage--generalisation-polish-0-1-0">Stage 8 — Generalisation polish<a class="anchor" aria-label="anchor" href="#stage--generalisation-polish-0-1-0"></a></h3>
-<ul><li>New <code>support_ticket_example</code> dataset: six support tickets moving through Open -&gt; Assigned -&gt; In Progress -&gt; Waiting on Customer -&gt; Resolved -&gt; Closed, with point events (<code>comment_added</code>, <code>priority_changed</code>, <code>reassigned</code>, <code>sla_warning</code>), no patient column, one ticket stalled for days in “Waiting on Customer”, and one still open. Deliberately non-healthcare, proving the package leaves the NHS sector entirely (<code>complaint_example</code> from Stage 5b is still NHS-adjacent). Exercised end-to-end through <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> (<code>state_label = "Status"</code>), <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code>, and <code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code>.</li>
+<ul><li>New <code>support_ticket_example</code> dataset: six support tickets moving through Open -&gt; Assigned -&gt; In Progress -&gt; Waiting on Customer -&gt; Resolved -&gt; Closed, with point events (<code>comment_added</code>, <code>priority_changed</code>, <code>reassigned</code>, <code>sla_warning</code>), no patient column, one ticket stalled for days in “Waiting on Customer”, and one still open. Deliberately non-healthcare, proving the package leaves the NHS sector entirely (<code>complaint_example</code> from Stage 5b is still NHS-adjacent). Exercised end-to-end through <code>plot_patient_journey()</code> (<code>state_label = "Status"</code>), <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code>, and <code>plot_journey_cohort()</code>.</li>
 <li>New <code>theme_journey(base_size = 11)</code> in <code>R/theme.R</code> factors out the <code>theme_minimal()</code> call plus the grid-line and title styling shared by <code>render_journey_plot()</code> and <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code>; each renderer layers its own legend/axis/margin customisations on top. Output is unchanged — verified by comparing the two renderers’ computed themes before and after the extraction, in addition to the existing vdiffr baselines.</li>
-<li>Light terminology pass: <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>’s header comment and the <code>location_categories</code> parameter comment now describe “location” generically (any exclusive state — a ward, a complaint stage, a ticket status, a pipeline step). No parameter names changed.</li>
+<li>Light terminology pass: <code>plot_patient_journey()</code>’s header comment and the <code>location_categories</code> parameter comment now describe “location” generically (any exclusive state — a ward, a complaint stage, a ticket status, a pipeline step). No parameter names changed.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="stage--interactive-renderer-0-1-0">Stage 7 — Interactive renderer<a class="anchor" aria-label="anchor" href="#stage--interactive-renderer-0-1-0"></a></h3>
 <ul><li>
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> gains <code>interactive = FALSE</code>. When <code>TRUE</code>, it returns a <code><a href="https://davidgohel.github.io/ggiraph/reference/girafe.html" class="external-link">ggiraph::girafe()</a></code> widget instead of a static <code>ggplot</code>: location boxes, terminal-state markers, and event points all gain hover tooltips. Box tooltips show the location, <code>format_duration()</code>-formatted duration, and entry/exit times, with an explicit <code>"(end inferred)"</code> / <code>"(inferred)"</code> caveat when the box’s end is imputed — a tooltip must never overclaim an end any more than the <code>show_duration</code> label may. Requires the <code>ggiraph</code> package (Suggests only); a <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> guard aborts with an install hint if it’s missing.</li>
+<code>plot_patient_journey()</code> gains <code>interactive = FALSE</code>. When <code>TRUE</code>, it returns a <code><a href="https://davidgohel.github.io/ggiraph/reference/girafe.html" class="external-link">ggiraph::girafe()</a></code> widget instead of a static <code>ggplot</code>: location boxes, terminal-state markers, and event points all gain hover tooltips. Box tooltips show the location, <code>format_duration()</code>-formatted duration, and entry/exit times, with an explicit <code>"(end inferred)"</code> / <code>"(inferred)"</code> caveat when the box’s end is imputed — a tooltip must never overclaim an end any more than the <code>show_duration</code> label may. Requires the <code>ggiraph</code> package (Suggests only); a <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> guard aborts with an install hint if it’s missing.</li>
 <li>Internal: <code>journey_layers()</code> gains an <code>opts$interactive</code> switch that emits ggiraph’s tooltip-bearing geoms (<code>geom_rect_interactive()</code>, <code>geom_segment_interactive()</code>, <code>geom_text_interactive()</code>, <code>geom_point_interactive()</code>) in place of their static equivalents for exactly the box/terminal-marker/point-event layers; every other layer (duration labels, reference lines, ggrepel event labels) is unaffected. New <code>render_journey_plot_interactive()</code> (<code>R/render_interactive.R</code>) calls <code>render_journey_plot()</code> with <code>opts$interactive = TRUE</code> and wraps the result in <code>girafe()</code> — no layer-building logic is duplicated.</li>
 <li>
 <code>interactive = FALSE</code> (the default) is untouched: the static layers stay the exact pre-Stage-7 <code>ggplot2::geom_*</code> classes, so every existing vdiffr baseline still applies unchanged.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="stage--cohort-aggregate--statistical-views-0-1-0">Stage 6 — Cohort aggregate / statistical views<a class="anchor" aria-label="anchor" href="#stage--cohort-aggregate--statistical-views-0-1-0"></a></h3>
-<ul><li>New <code><a href="../reference/summarise_journey_durations.html">summarise_journey_durations()</a></code> returns one row per location stay across a cohort (case, location, entry/exit, duration, <code>end_inferred</code>, <code>terminal</code>), and <code><a href="../reference/summarise_stage_durations.html">summarise_stage_durations()</a></code> builds per-location statistics on it (case count, mean/median/p25/p75 dwell, <code>n_inferred_excluded</code>).</li>
+<ul><li>New <code>summarise_journey_durations()</code> returns one row per location stay across a cohort (case, location, entry/exit, duration, <code>end_inferred</code>, <code>terminal</code>), and <code>summarise_stage_durations()</code> builds per-location statistics on it (case count, mean/median/p25/p75 dwell, <code>n_inferred_excluded</code>).</li>
 <li>New <code>summarise_breach_rate(data, target_hours, scope = ...)</code> reports what fraction of cases exceed a target. <code>scope = "spell"</code> measures whole-spell elapsed time (first move to last event); <code>scope = "&lt;location&gt;"</code> measures dwell within one stage (e.g. the ED 4-hour standard). An unknown scope name aborts with a did-you-mean hint.</li>
 <li>New <code><a href="../reference/summarise_transitions.html">summarise_transitions()</a></code> reduces the cohort to directed location-to-location transitions with counts and mean/median dwell in the origin state, and <code><a href="../reference/plot_transition_summary.html">plot_transition_summary()</a></code> draws them as a hand-rolled flow diagram (no new dependency): nodes ordered along a left-to-right spine, arrowed edges whose width encodes frequency, forward and backward transitions bowed opposite ways so re-entries stay legible.</li>
 <li>
 <strong>Every duration statistic respects <code>end_inferred</code>.</strong> The imputed end of a non-terminal final stay is a rendering convenience, not data; each summariser takes <code>include_inferred = FALSE</code> (default), excluding those durations from means/medians/quantiles and reporting <code>n_inferred_excluded</code>. <code>TRUE</code> folds them back in, with the <code>end_inferred</code> flag travelling in the output.</li>
 <li>
-<code>plot_patient_journey(return_data = TRUE)</code> now also returns a <code>summary</code> element (<code><a href="../reference/summarise_journey_durations.html">summarise_journey_durations()</a></code> for that one case), so the return value is <code>list(plot, boxes, events, summary)</code>. Additive — existing callers are unaffected.</li>
-<li>New <code><a href="../reference/plot_journey_with_summary.html">plot_journey_with_summary()</a></code> (stretch) stacks a single case’s timeline above a per-stage dwell bar chart via <code>patchwork</code>, guarded with a <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> install hint.</li>
+<code>plot_patient_journey(return_data = TRUE)</code> now also returns a <code>summary</code> element (<code>summarise_journey_durations()</code> for that one case), so the return value is <code>list(plot, boxes, events, summary)</code>. Additive — existing callers are unaffected.</li>
+<li>New <code>plot_journey_with_summary()</code> (stretch) stacks a single case’s timeline above a per-stage dwell bar chart via <code>patchwork</code>, guarded with a <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> install hint.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="stageb--linear-stage-processes-staircase-view-0-1-0">Stage 5b — Linear stage processes (staircase view)<a class="anchor" aria-label="anchor" href="#stageb--linear-stage-processes-staircase-view-0-1-0"></a></h3>
@@ -102,12 +182,12 @@
 <li>
 <code><a href="../reference/plot_stage_ladder.html">plot_stage_ladder()</a></code> accepts <code>stage_order</code> to pin the vertical ordering (default: first appearance) and <code>stage_targets</code>, a named <code>stage -&gt; hours</code> vector rendering a light allowance band per targeted stage with any excess dwell drawn in <code>firebrick</code>. The terminal stage is drawn as a point marker, not a segment.</li>
 <li>
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> gains a <code>state_label</code> argument (default <code>"Location"</code>) setting the fill-legend title, so a complaint’s boxes read as “Stage” and a ticket’s as “Status”. Default output is unchanged.</li>
+<code>plot_patient_journey()</code> gains a <code>state_label</code> argument (default <code>"Location"</code>) setting the fill-legend title, so a complaint’s boxes read as “Stage” and a ticket’s as “Status”. Default output is unchanged.</li>
 <li>New <code>complaint_example</code> dataset: eight complaints moving through Acknowledgement -&gt; Triage -&gt; Assigned -&gt; Under review -&gt; Senior review -&gt; Formal letter sent, with no patient column (exercising <code>patient_col = NULL</code>). One complaint stalls ~3 weeks in “Under review” and one is still open, exercising the per-stage breach and ongoing-spell paths respectively.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="stage--cohort-view-via-faceting-0-1-0">Stage 5 — Cohort view via faceting<a class="anchor" aria-label="anchor" href="#stage--cohort-view-via-faceting-0-1-0"></a></h3>
-<ul><li>New <code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> lays several spells out as a faceted small-multiples grid, one panel per case, for at-a-glance comparison. It reuses the single-case <code>validate_event_log()</code> + <code>build_journey_tables()</code> pipeline per case rather than re-deriving anything, and asserts cross-facet colour consistency (the same location keeps the same fill in every panel).</li>
+<ul><li>New <code>plot_journey_cohort()</code> lays several spells out as a faceted small-multiples grid, one panel per case, for at-a-glance comparison. It reuses the single-case <code>validate_event_log()</code> + <code>build_journey_tables()</code> pipeline per case rather than re-deriving anything, and asserts cross-facet colour consistency (the same location keeps the same fill in every panel).</li>
 <li>
 <code>align_start = TRUE</code> rebases every case to elapsed hours from its own first move and draws them on one shared <code>+Nh</code> axis (<code>scales = "fixed"</code>) so durations line up; the default absolute-time mode gives each panel its own datetime range (<code>scales = "free_x"</code>). A <code>max_cases</code> guard (default 25) aborts rather than attempting to facet hundreds of spells.</li>
 <li>Internal: the ggplot renderer was split into <code>journey_layers()</code> (geoms only) plus scale/theme assembly, and gained an <code>x_scale</code> option (<code>"datetime"</code> / <code>"elapsed_hours"</code>) and optional faceting. The single-case path is byte-identical — every existing vdiffr baseline is unchanged.</li>
@@ -115,7 +195,7 @@
 <div class="section level3">
 <h3 id="stage--swimlanes-concurrent-event-tracks-within-one-case-0-1-0">Stage 4 — Swimlanes (concurrent event tracks within one case)<a class="anchor" aria-label="anchor" href="#stage--swimlanes-concurrent-event-tracks-within-one-case-0-1-0"></a></h3>
 <ul><li>
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> gains a <code>lane_col</code> argument. When supplied, its distinct values become horizontal lanes and point events are stacked into them above the location band, so concurrent tracks within a single case (e.g. nursing / medical / diagnostics activity) no longer collide on one midline. Lanes affect point events only — the location boxes stay the spine. Lane order follows factor levels when the column is a factor, else first appearance.</li>
+<code>plot_patient_journey()</code> gains a <code>lane_col</code> argument. When supplied, its distinct values become horizontal lanes and point events are stacked into them above the location band, so concurrent tracks within a single case (e.g. nursing / medical / diagnostics activity) no longer collide on one midline. Lanes affect point events only — the location boxes stay the spine. Lane order follows factor levels when the column is a factor, else first appearance.</li>
 <li>New <code>lane_height</code> / <code>lane_gap</code> arguments tune lane geometry; they default (<code>NULL</code>) to <code>box_height</code> and <code>0.05 * box_height</code>. Lanes stack upward from the reserved swimlane floor at <code>box_height * 1.3</code>, above the duration- and reference-label rows.</li>
 <li>The y-axis now labels each lane when swimlanes are active and stays blank otherwise. Many lanes make a tall plot — there is no automatic lane cap.</li>
 <li>
@@ -126,11 +206,11 @@
 <ul><li>New <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> constructor: a classed list bundling <code>time_col</code>/<code>act_type_col</code>/<code>activity_col</code>/<code>case_col</code>/<code>patient_col</code>/ <code>location_categories</code>, with a <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code> method. Every field defaults to <code>NULL</code> (“not part of this schema”).</li>
 <li>New <code>autodetect_schema(data, location_categories = NULL)</code> matches column names against per-role candidate lists (case-insensitive exact match first, then <code>adist() &lt;= 2</code> fuzzy match), resolving roles in a fixed order (time -&gt; case -&gt; act_type -&gt; activity -&gt; patient) so a column claimed by one role is never reconsidered for another. Two equally-good matches for one role, or an unresolved required role, abort naming the problem rather than guessing.</li>
 <li>
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> gains a <code>schema</code> argument. Precedence per field, highest wins: an explicit individual argument (<code>time_col</code>, <code>case_col</code>, …) &gt; the matching schema field &gt; the function’s existing hardcoded default. Autodetection only ever runs when <code>schema = "auto"</code> is passed literally — passing an <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> object never triggers it. Default behaviour (no <code>schema</code> argument) is unchanged.</li>
+<code>plot_patient_journey()</code> gains a <code>schema</code> argument. Precedence per field, highest wins: an explicit individual argument (<code>time_col</code>, <code>case_col</code>, …) &gt; the matching schema field &gt; the function’s existing hardcoded default. Autodetection only ever runs when <code>schema = "auto"</code> is passed literally — passing an <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> object never triggers it. Default behaviour (no <code>schema</code> argument) is unchanged.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="stage--wide-to-long-pivot-wrapper-0-1-0">Stage 2 — Wide-to-long pivot wrapper<a class="anchor" aria-label="anchor" href="#stage--wide-to-long-pivot-wrapper-0-1-0"></a></h3>
-<ul><li>New <code><a href="../reference/pivot_events_longer.html">pivot_events_longer()</a></code> reshapes wide, one-row-per-case milestone data (e.g. <code>arrival_time</code>, <code>triage_time</code>, <code>discharge_time</code> columns) into the long, one-row-per-event form <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> expects. Handles location vs. non-location milestones (<code>location_cols</code>), custom <code>act_type_map</code>/<code>activity_map</code> overrides, NA-milestone dropping, and suffix-stripped auto-labelling (<code>"arrival_time"</code> -&gt; <code>"Arrival"</code>).</li>
+<ul><li>New <code><a href="../reference/pivot_events_longer.html">pivot_events_longer()</a></code> reshapes wide, one-row-per-case milestone data (e.g. <code>arrival_time</code>, <code>triage_time</code>, <code>discharge_time</code> columns) into the long, one-row-per-event form <code>plot_patient_journey()</code> expects. Handles location vs. non-location milestones (<code>location_cols</code>), custom <code>act_type_map</code>/<code>activity_map</code> overrides, NA-milestone dropping, and suffix-stripped auto-labelling (<code>"arrival_time"</code> -&gt; <code>"Arrival"</code>).</li>
 <li>
 <code>tidyr</code> moved from Suggests to Imports (used by <code><a href="../reference/pivot_events_longer.html">pivot_events_longer()</a></code>).</li>
 <li>Internal: timestamp coercion extracted from <code>validate_event_log()</code> into a shared <code>coerce_datetime_column()</code> helper, reused by the new pivot function.</li>
@@ -154,7 +234,7 @@
 </ul></div>
 <div class="section level3">
 <h3 id="stage--visual-quick-wins-0-1-0">Stage 1 — Visual quick wins<a class="anchor" aria-label="anchor" href="#stage--visual-quick-wins-0-1-0"></a></h3>
-<p>New opt-in features on <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>, each defaulting to prior behaviour:</p>
+<p>New opt-in features on <code>plot_patient_journey()</code>, each defaulting to prior behaviour:</p>
 <ul><li>
 <code>show_duration</code> — formatted duration label above each non-terminal box; boxes with an inferred end get a <code>"+"</code> suffix (1a).</li>
 <li>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,44 +71,44 @@
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jaspercain01.github.io/event-driven-visualisation/">eventviz</a></span><span class="op">)</span></span></code></pre></div>
 <p>Everything so far has looked at one case at a time. This vignette
 covers comparing many cases at once: a faceted small-multiples view, and
-aggregate statistics (per-stage durations, breach rates against a
+aggregate statistics (per-state durations, breach rates against a
 target, and a transition-flow diagram) across a whole cohort. It uses
 <code>complaint_example</code>’s eight complaints throughout.</p>
 <div class="section level2">
-<h2 id="faceted-comparison-plot_journey_cohort">Faceted comparison: <code>plot_journey_cohort()</code><a class="anchor" aria-label="anchor" href="#faceted-comparison-plot_journey_cohort"></a>
+<h2 id="faceted-comparison-plot_cohort_timeline">Faceted comparison: <code>plot_cohort_timeline()</code><a class="anchor" aria-label="anchor" href="#faceted-comparison-plot_cohort_timeline"></a>
 </h2>
-<p><code><a href="../reference/plot_journey_cohort.html">plot_journey_cohort()</a></code> lays several cases out as one
+<p><code><a href="../reference/plot_cohort_timeline.html">plot_cohort_timeline()</a></code> lays several cases out as one
 facet panel per case. By default (<code>case_ids = NULL</code>) it plots
 every case in the data, up to a <code>max_cases</code> guard (25, since
-faceting hundreds of spells is a hang, not a plot — pass explicit
+faceting hundreds of cases is a hang, not a plot — pass explicit
 <code>case_ids</code> to raise it):</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_journey_cohort.html">plot_journey_cohort</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_cohort_timeline.html">plot_cohort_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
+<span>  terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
 <span>  state_label <span class="op">=</span> <span class="st">"Stage"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort-analysis_files/figure-html/cohort-absolute-1.png" class="r-plt" alt="" width="768"></p>
 <p>Each panel gets its own time axis by default
 (<code>align_start = FALSE</code>), so absolute dates line up across
 panels — useful for spotting whether several complaints were affected by
-the same event (a staffing gap, a system outage). The same location
-keeps the same fill colour in every panel: the palette is built once,
-over the union of stages across the whole cohort, not independently per
+the same event (a staffing gap, a system outage). The same state keeps
+the same fill colour in every panel: the palette is built once, over the
+union of states across the whole cohort, not independently per
 panel.</p>
 <div class="section level3">
 <h3 id="aligning-start-times">Aligning start times<a class="anchor" aria-label="anchor" href="#aligning-start-times"></a>
 </h3>
 <p>To compare <em>durations</em> rather than <em>dates</em>, rebase
-every case to elapsed hours from its own first move with
+every case to elapsed hours from its own first state event with
 <code>align_start = TRUE</code>. All panels then share one
 <code>+Nh</code> axis:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_journey_cohort.html">plot_journey_cohort</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_cohort_timeline.html">plot_cohort_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
+<span>  terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span>
 <span>  state_label <span class="op">=</span> <span class="st">"Stage"</span>, align_start <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort-analysis_files/figure-html/cohort-aligned-1.png" class="r-plt" alt="" width="768"></p>
@@ -125,16 +125,15 @@ cohort, <code>eventviz</code> also has numeric summarisers built on the
 same box-derivation pipeline, so they describe exactly what the plots
 draw.</p>
 <div class="section level3">
-<h3 id="per-stage-duration-statistics">Per-stage duration statistics<a class="anchor" aria-label="anchor" href="#per-stage-duration-statistics"></a>
+<h3 id="per-state-duration-statistics">Per-state duration statistics<a class="anchor" aria-label="anchor" href="#per-state-duration-statistics"></a>
 </h3>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/summarise_stage_durations.html">summarise_stage_durations</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/summarise_state_durations.html">summarise_state_durations</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 6 × 7</span></span></span>
-<span><span class="co">#&gt;   location   n_cases mean_secs median_secs p25_secs p75_secs n_inferred_excluded</span></span>
+<span><span class="co">#&gt;   state      n_cases mean_secs median_secs p25_secs p75_secs n_inferred_excluded</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>       <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>               <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> Acknowled…       8   <span style="text-decoration: underline;">108</span>000        <span style="text-decoration: underline;">86</span>400    <span style="text-decoration: underline;">86</span>400   <span style="text-decoration: underline;">140</span>400                   0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> Assigned         8    <span style="text-decoration: underline;">97</span>200        <span style="text-decoration: underline;">86</span>400    <span style="text-decoration: underline;">86</span>400    <span style="text-decoration: underline;">97</span>200                   0</span></span>
@@ -143,7 +142,7 @@ draw.</p>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">5</span> Triage           8    <span style="text-decoration: underline;">91</span>800        <span style="text-decoration: underline;">86</span>400    <span style="text-decoration: underline;">86</span>400    <span style="text-decoration: underline;">86</span>400                   0</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">6</span> Under rev…       8   <span style="text-decoration: underline;">487</span>543.      <span style="text-decoration: underline;">259</span>200   <span style="text-decoration: underline;">216</span>000   <span style="text-decoration: underline;">388</span>800                   1</span></span></code></pre></div>
 <p>Every duration statistic in the package respects
-<code>end_inferred</code>: a case’s <em>final</em> stage has no recorded
+<code>end_inferred</code>: a case’s <em>final</em> state has no recorded
 exit, so its dwell is an imputed rendering convenience, not data. By
 default it’s excluded from the mean/median/ quantiles
 (<code>n_inferred_excluded</code> reports how many were dropped); pass
@@ -153,15 +152,14 @@ default it’s excluded from the mean/median/ quantiles
 <h3 id="breach-rate-against-a-target">Breach rate against a target<a class="anchor" aria-label="anchor" href="#breach-rate-against-a-target"></a>
 </h3>
 <p><code><a href="../reference/summarise_breach_rate.html">summarise_breach_rate()</a></code> reports what fraction of cases
-exceed a target, either across the whole spell
-(<code>scope = "spell"</code>) or within one named stage
-(<code>scope = "&lt;stage name&gt;"</code>, e.g. an SLA on how long a
+exceed a target, either across the whole case
+(<code>scope = "case"</code>) or within one named state
+(<code>scope = "&lt;state name&gt;"</code>, e.g. an SLA on how long a
 complaint may sit in “Under review”):</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">breach</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/summarise_breach_rate.html">summarise_breach_rate</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>, target_hours <span class="op">=</span> <span class="fl">24</span> <span class="op">*</span> <span class="fl">7</span>, scope <span class="op">=</span> <span class="st">"Under review"</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">breach</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 7 × 4</span></span></span>
@@ -181,20 +179,19 @@ complaint may sit in “Under review”):</p>
 <h3 id="transition-flow">Transition flow<a class="anchor" aria-label="anchor" href="#transition-flow"></a>
 </h3>
 <p><code><a href="../reference/summarise_transitions.html">summarise_transitions()</a></code> reduces the cohort to directed
-stage-to-stage transitions with counts and mean/median dwell in the
-origin stage; <code><a href="../reference/plot_transition_summary.html">plot_transition_summary()</a></code> draws them as a
+state-to-state transitions with counts and mean/median dwell in the
+origin state; <code><a href="../reference/plot_transition_summary.html">plot_transition_summary()</a></code> draws them as a
 flow diagram, with edge width encoding frequency and forward/backward
 transitions bowed opposite ways so re-entries stay legible:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_transition_summary.html">plot_transition_summary</a></span><span class="op">(</span></span>
 <span>  <span class="va">complaint_example</span>,</span>
-<span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort-analysis_files/figure-html/transitions-1.png" class="r-plt" alt="" width="768"></p>
 <p>Every complaint here follows the same six stages in the same order,
 so the diagram is a straight line — the re-entry handling matters more
-for cohorts where cases can loop back or skip stages (a ticket reopened
+for cohorts where cases can loop back or skip states (a ticket reopened
 after “Resolved”, say).</p>
 </div>
 </div>
@@ -206,10 +203,10 @@ after “Resolved”, say).</p>
 <code><a href="../articles/linear-processes.html">vignette("linear-processes")</a></code> for the single-case
 staircase view these aggregates complement.</li>
 <li>
-<code><a href="../reference/plot_patient_journey.html">?plot_patient_journey</a></code> for
+<code><a href="../reference/plot_case_timeline.html">?plot_case_timeline</a></code> for
 <code>return_data = TRUE</code>’s single-case <code>summary</code>
-element, built on the same <code><a href="../reference/summarise_journey_durations.html">summarise_journey_durations()</a></code>
-this vignette uses across a cohort.</li>
+element, built on the same <code><a href="../reference/summarise_case_durations.html">summarise_case_durations()</a></code> this
+vignette uses across a cohort.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

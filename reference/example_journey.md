@@ -13,12 +13,12 @@ example_journey
 
 ## Format
 
-A tibble with columns \`caseID\`, \`K_Number\`, \`timestamp\`,
-\`act_type\`, \`activity\`.
+A tibble with columns \`case_id\`, \`timestamp\`, \`act_type\`,
+\`activity\`.
 
 ## Examples
 
 ``` r
-plot_patient_journey(example_journey, case_id = "SP-001")
-
+plot_case_timeline(example_journey, state_events = c("location_move", "ed_location_move"))
+#> ℹ `case_id` not supplied; using the only case "SP-001".
 ```

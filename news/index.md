@@ -1,5 +1,92 @@
 # Changelog
 
+## eventviz 0.2.0
+
+A generic-core redesign: a first-time user with any timestamped event
+log now gets a correct plot in one call, with exactly one explicit
+declaration (`state_events` — which event types open a state) and no
+healthcare vocabulary anywhere in the API surface. The package has no
+users yet, so this is a clean break: no deprecation shims, no
+compatibility aliases.
+
+### Renames
+
+| Old | New |
+|----|----|
+| `plot_patient_journey()` | [`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md) |
+| `plot_journey_cohort()` | [`plot_cohort_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_cohort_timeline.md) |
+| `summarise_journey_durations()` | [`summarise_case_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_case_durations.md) |
+| `summarise_stage_durations()` | [`summarise_state_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_state_durations.md) |
+| `plot_journey_with_summary()` | [`plot_case_timeline_with_summary()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline_with_summary.md) |
+| `theme_journey()` | [`theme_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/theme_timeline.md) |
+| argument `location_categories` / `stage_categories` | `state_events` (every function; **required, no default**) |
+| argument `patient_col` | **deleted** (every function) |
+| argument `location_palette` | `state_palette` |
+| argument default `state_label = "Location"` | `state_label = "State"` |
+| argument default `case_col = "caseID"` | `case_col = "case_id"` |
+| pivot argument `location_cols` | `state_cols` |
+| pivot emitted `act_type` value `"location_move"` | `"state_change"` |
+| schema field `location_categories` | `state_events` |
+| schema field `patient_col` | **deleted** |
+| output columns `location` / `from_location` / `to_location` | `state` / `from_state` / `to_state` |
+| [`summarise_breach_rate()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_breach_rate.md) `scope = "spell"` | `scope = "case"` |
+
+[`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md)’s
+`stage_order` keeps its name;
+[`plot_transition_summary()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_transition_summary.md),
+[`summarise_breach_rate()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_breach_rate.md),
+[`summarise_transitions()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_transitions.md),
+and
+[`event_log_schema()`](https://jaspercain01.github.io/event-driven-visualisation/reference/event_log_schema.md)/
+[`autodetect_schema()`](https://jaspercain01.github.io/event-driven-visualisation/reference/autodetect_schema.md)
+keep their names.
+
+### New case-resolution rules
+
+- `state_events` has no default anywhere. Omitting it aborts with an
+  error listing the distinct `act_type` values present in your data
+  (with row counts) so you can see what to pass — this listing *is* the
+  discovery mechanism; there is no value-level autodetection.
+- `case_id = NULL` (the new default) resolves to the column’s only value
+  when there is exactly one case, informing you which one was used; with
+  more than one case it aborts, naming the first 10 and pointing at
+  [`plot_cohort_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_cohort_timeline.md).
+- `case_col = NULL` treats the whole data frame as a single unnamed
+  series
+  ([`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md)
+  and
+  [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md)
+  only — a cohort or a summariser still needs a case column).
+- `schema`
+  ([`event_log_schema()`](https://jaspercain01.github.io/event-driven-visualisation/reference/event_log_schema.md)
+  /
+  [`autodetect_schema()`](https://jaspercain01.github.io/event-driven-visualisation/reference/autodetect_schema.md)
+  / `schema = "auto"`) is now accepted by every cohort/aggregate
+  function, closing a 0.1.0 gap where only the main plotting function
+  did.
+- The multi-patient-per-case warning is gone along with the
+  `patient_col` concept it existed to check.
+
+### Vocabulary
+
+The concept formerly called “location” (a box on the timeline, a rung on
+the ladder) is now uniformly the **state**: an exclusive condition a
+case occupies for an interval, opened by an event in `state_events` and
+closed by the next such event — see
+[`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md)’s
+`@details` for the exclusivity/contiguity semantics. The synthetic
+leading box for events before the first state event is now labelled
+`"(before first state)"` (was `"(pre-admission)"`). Auto-generated
+titles are always `"Case <id>"` (no title at all when
+`case_col = NULL`).
+
+### Datasets
+
+`example_journey`’s `caseID` column is renamed `case_id`, and its
+`K_Number` column is dropped entirely — the secondary-identifier concept
+it represented no longer exists. `complaint_example` and
+`support_ticket_example` are unchanged.
+
 ## eventviz 0.1.0
 
 Initial release. Turns the original single-file patient-journey timeline
@@ -14,26 +101,25 @@ complaints, and support tickets.
 Four defects found in an executed review of the completed stages, plus
 packaging-layout corrections:
 
-- [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md)
-  (absolute-time mode) now sizes the cosmetic inter-box gap — and each
-  box’s minimum render width — against each facet panel’s own time span
-  instead of the whole cohort’s calendar span. Previously, a cohort
-  whose cases were months apart rendered every box at many times its
-  true width. Axis-break selection likewise now sees the widest single
-  panel, giving per-panel time labels instead of one break sized for the
-  whole calendar range. The `cohort-absolute` vdiffr baseline was
-  re-rendered and visually re-approved for this change.
-- [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md)
-  with `event_type_top_n`: the `"Other"` bucket now receives a colour
-  from the event palette. Previously the cohort palette was built over
-  the raw (unbucketed) event types, so `"Other"` silently fell back to
-  the grey `na.value`.
-- [`plot_journey_with_summary()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_with_summary.md)
-  now derives the bar-chart colours from the exact fill levels the
-  timeline used (including any synthetic `"(pre-admission)"` box) and
-  honours `palette_style`/`location_palette` passed through `...`.
-  Previously the bars rebuilt their palette over a different level set,
-  shifting every hue by one position whenever the two differed.
+- `plot_journey_cohort()` (absolute-time mode) now sizes the cosmetic
+  inter-box gap — and each box’s minimum render width — against each
+  facet panel’s own time span instead of the whole cohort’s calendar
+  span. Previously, a cohort whose cases were months apart rendered
+  every box at many times its true width. Axis-break selection likewise
+  now sees the widest single panel, giving per-panel time labels instead
+  of one break sized for the whole calendar range. The `cohort-absolute`
+  vdiffr baseline was re-rendered and visually re-approved for this
+  change.
+- `plot_journey_cohort()` with `event_type_top_n`: the `"Other"` bucket
+  now receives a colour from the event palette. Previously the cohort
+  palette was built over the raw (unbucketed) event types, so `"Other"`
+  silently fell back to the grey `na.value`.
+- `plot_journey_with_summary()` now derives the bar-chart colours from
+  the exact fill levels the timeline used (including any synthetic
+  `"(pre-admission)"` box) and honours
+  `palette_style`/`location_palette` passed through `...`. Previously
+  the bars rebuilt their palette over a different level set, shifting
+  every hue by one position whenever the two differed.
 - [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md)
   `stage_targets` now bands **every** visit to a stage a case re-enters,
   and draws the firebrick breach excess per visit. Previously only the
@@ -45,12 +131,10 @@ packaging-layout corrections:
   bound, so a visible breach is proven. The excess is capped at the last
   observed instant, so a median/fixed-imputed end never inflates it.
   Previously an open stage never showed a breach at all.
-- [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md)
-  now draws the `(ongoing)` open-spell marker in the panel of every case
-  that never reaches a `terminal_activities` state (previously
-  deferred), and gains a `tail_strategy` argument forwarded per case,
-  for parity with
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md).
+- `plot_journey_cohort()` now draws the `(ongoing)` open-spell marker in
+  the panel of every case that never reaches a `terminal_activities`
+  state (previously deferred), and gains a `tail_strategy` argument
+  forwarded per case, for parity with `plot_patient_journey()`.
 - Packaging: the three example datasets moved to `data/` as lazy-loaded
   `.rda` files built by `data-raw/` scripts (documented in `R/data.R`),
   as the implementation plan’s Stage 0 specified; `LICENSE` now uses
@@ -75,16 +159,13 @@ packaging-layout corrections:
 
 ### Stage 9 — Test gap-closing & internal cleanup
 
-- Added direct tests for
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)’s
-  own orchestration logic that nothing else exercised: auto-generated
-  title format (with and without `patient_col`, and explicit-title
-  override), `exclude_categories` row-count accounting (the drop
-  message, the no-op case, and the abort when every location event is
-  removed), and the full `return_data = TRUE` shape
-  (`list(plot, boxes, events, summary)`, checked against
-  [`summarise_journey_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_journey_durations.md)
-  for the same case).
+- Added direct tests for `plot_patient_journey()`’s own orchestration
+  logic that nothing else exercised: auto-generated title format (with
+  and without `patient_col`, and explicit-title override),
+  `exclude_categories` row-count accounting (the drop message, the no-op
+  case, and the abort when every location event is removed), and the
+  full `return_data = TRUE` shape (`list(plot, boxes, events, summary)`,
+  checked against `summarise_journey_durations()` for the same case).
 - Added the vdiffr baseline `support_ticket_example` was still missing
   (lanes/cohort/ladder already had one from their own stages).
 - Internal: `derive_point_events()` now returns `list(events, pre_box)`
@@ -116,12 +197,10 @@ packaging-layout corrections:
   one ticket stalled for days in “Waiting on Customer”, and one still
   open. Deliberately non-healthcare, proving the package leaves the NHS
   sector entirely (`complaint_example` from Stage 5b is still
-  NHS-adjacent). Exercised end-to-end through
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
+  NHS-adjacent). Exercised end-to-end through `plot_patient_journey()`
   (`state_label = "Status"`),
   [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md),
-  and
-  [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md).
+  and `plot_journey_cohort()`.
 - New `theme_journey(base_size = 11)` in `R/theme.R` factors out the
   `theme_minimal()` call plus the grid-line and title styling shared by
   `render_journey_plot()` and
@@ -130,17 +209,15 @@ packaging-layout corrections:
   Output is unchanged — verified by comparing the two renderers’
   computed themes before and after the extraction, in addition to the
   existing vdiffr baselines.
-- Light terminology pass:
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)’s
-  header comment and the `location_categories` parameter comment now
-  describe “location” generically (any exclusive state — a ward, a
-  complaint stage, a ticket status, a pipeline step). No parameter names
-  changed.
+- Light terminology pass: `plot_patient_journey()`’s header comment and
+  the `location_categories` parameter comment now describe “location”
+  generically (any exclusive state — a ward, a complaint stage, a ticket
+  status, a pipeline step). No parameter names changed.
 
 ### Stage 7 — Interactive renderer
 
-- [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-  gains `interactive = FALSE`. When `TRUE`, it returns a
+- `plot_patient_journey()` gains `interactive = FALSE`. When `TRUE`, it
+  returns a
   [`ggiraph::girafe()`](https://davidgohel.github.io/ggiraph/reference/girafe.html)
   widget instead of a static `ggplot`: location boxes, terminal-state
   markers, and event points all gain hover tooltips. Box tooltips show
@@ -167,13 +244,11 @@ packaging-layout corrections:
 
 ### Stage 6 — Cohort aggregate / statistical views
 
-- New
-  [`summarise_journey_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_journey_durations.md)
-  returns one row per location stay across a cohort (case, location,
-  entry/exit, duration, `end_inferred`, `terminal`), and
-  [`summarise_stage_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_stage_durations.md)
-  builds per-location statistics on it (case count, mean/median/p25/p75
-  dwell, `n_inferred_excluded`).
+- New `summarise_journey_durations()` returns one row per location stay
+  across a cohort (case, location, entry/exit, duration, `end_inferred`,
+  `terminal`), and `summarise_stage_durations()` builds per-location
+  statistics on it (case count, mean/median/p25/p75 dwell,
+  `n_inferred_excluded`).
 - New `summarise_breach_rate(data, target_hours, scope = ...)` reports
   what fraction of cases exceed a target. `scope = "spell"` measures
   whole-spell elapsed time (first move to last event);
@@ -196,17 +271,13 @@ packaging-layout corrections:
   `n_inferred_excluded`. `TRUE` folds them back in, with the
   `end_inferred` flag travelling in the output.
 - `plot_patient_journey(return_data = TRUE)` now also returns a
-  `summary` element
-  ([`summarise_journey_durations()`](https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_journey_durations.md)
-  for that one case), so the return value is
-  `list(plot, boxes, events, summary)`. Additive — existing callers are
-  unaffected.
-- New
-  [`plot_journey_with_summary()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_with_summary.md)
-  (stretch) stacks a single case’s timeline above a per-stage dwell bar
-  chart via `patchwork`, guarded with a
-  [`requireNamespace()`](https://rdrr.io/r/base/ns-load.html) install
-  hint.
+  `summary` element (`summarise_journey_durations()` for that one case),
+  so the return value is `list(plot, boxes, events, summary)`. Additive
+  — existing callers are unaffected.
+- New `plot_journey_with_summary()` (stretch) stacks a single case’s
+  timeline above a per-stage dwell bar chart via `patchwork`, guarded
+  with a [`requireNamespace()`](https://rdrr.io/r/base/ns-load.html)
+  install hint.
 
 ### Stage 5b — Linear stage processes (staircase view)
 
@@ -224,10 +295,10 @@ packaging-layout corrections:
   rendering a light allowance band per targeted stage with any excess
   dwell drawn in `firebrick`. The terminal stage is drawn as a point
   marker, not a segment.
-- [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-  gains a `state_label` argument (default `"Location"`) setting the
-  fill-legend title, so a complaint’s boxes read as “Stage” and a
-  ticket’s as “Status”. Default output is unchanged.
+- `plot_patient_journey()` gains a `state_label` argument (default
+  `"Location"`) setting the fill-legend title, so a complaint’s boxes
+  read as “Stage” and a ticket’s as “Status”. Default output is
+  unchanged.
 - New `complaint_example` dataset: eight complaints moving through
   Acknowledgement -\> Triage -\> Assigned -\> Under review -\> Senior
   review -\> Formal letter sent, with no patient column (exercising
@@ -237,13 +308,12 @@ packaging-layout corrections:
 
 ### Stage 5 — Cohort view via faceting
 
-- New
-  [`plot_journey_cohort()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.md)
-  lays several spells out as a faceted small-multiples grid, one panel
-  per case, for at-a-glance comparison. It reuses the single-case
-  `validate_event_log()` + `build_journey_tables()` pipeline per case
-  rather than re-deriving anything, and asserts cross-facet colour
-  consistency (the same location keeps the same fill in every panel).
+- New `plot_journey_cohort()` lays several spells out as a faceted
+  small-multiples grid, one panel per case, for at-a-glance comparison.
+  It reuses the single-case `validate_event_log()` +
+  `build_journey_tables()` pipeline per case rather than re-deriving
+  anything, and asserts cross-facet colour consistency (the same
+  location keeps the same fill in every panel).
 - `align_start = TRUE` rebases every case to elapsed hours from its own
   first move and draws them on one shared `+Nh` axis
   (`scales = "fixed"`) so durations line up; the default absolute-time
@@ -258,14 +328,13 @@ packaging-layout corrections:
 
 ### Stage 4 — Swimlanes (concurrent event tracks within one case)
 
-- [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-  gains a `lane_col` argument. When supplied, its distinct values become
-  horizontal lanes and point events are stacked into them above the
-  location band, so concurrent tracks within a single case (e.g. nursing
-  / medical / diagnostics activity) no longer collide on one midline.
-  Lanes affect point events only — the location boxes stay the spine.
-  Lane order follows factor levels when the column is a factor, else
-  first appearance.
+- `plot_patient_journey()` gains a `lane_col` argument. When supplied,
+  its distinct values become horizontal lanes and point events are
+  stacked into them above the location band, so concurrent tracks within
+  a single case (e.g. nursing / medical / diagnostics activity) no
+  longer collide on one midline. Lanes affect point events only — the
+  location boxes stay the spine. Lane order follows factor levels when
+  the column is a factor, else first appearance.
 - New `lane_height` / `lane_gap` arguments tune lane geometry; they
   default (`NULL`) to `box_height` and `0.05 * box_height`. Lanes stack
   upward from the reserved swimlane floor at `box_height * 1.3`, above
@@ -293,12 +362,11 @@ packaging-layout corrections:
   column claimed by one role is never reconsidered for another. Two
   equally-good matches for one role, or an unresolved required role,
   abort naming the problem rather than guessing.
-- [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-  gains a `schema` argument. Precedence per field, highest wins: an
-  explicit individual argument (`time_col`, `case_col`, …) \> the
-  matching schema field \> the function’s existing hardcoded default.
-  Autodetection only ever runs when `schema = "auto"` is passed
-  literally — passing an
+- `plot_patient_journey()` gains a `schema` argument. Precedence per
+  field, highest wins: an explicit individual argument (`time_col`,
+  `case_col`, …) \> the matching schema field \> the function’s existing
+  hardcoded default. Autodetection only ever runs when `schema = "auto"`
+  is passed literally — passing an
   [`event_log_schema()`](https://jaspercain01.github.io/event-driven-visualisation/reference/event_log_schema.md)
   object never triggers it. Default behaviour (no `schema` argument) is
   unchanged.
@@ -309,12 +377,10 @@ packaging-layout corrections:
   [`pivot_events_longer()`](https://jaspercain01.github.io/event-driven-visualisation/reference/pivot_events_longer.md)
   reshapes wide, one-row-per-case milestone data (e.g. `arrival_time`,
   `triage_time`, `discharge_time` columns) into the long,
-  one-row-per-event form
-  [`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
-  expects. Handles location vs. non-location milestones
-  (`location_cols`), custom `act_type_map`/`activity_map` overrides,
-  NA-milestone dropping, and suffix-stripped auto-labelling
-  (`"arrival_time"` -\> `"Arrival"`).
+  one-row-per-event form `plot_patient_journey()` expects. Handles
+  location vs. non-location milestones (`location_cols`), custom
+  `act_type_map`/`activity_map` overrides, NA-milestone dropping, and
+  suffix-stripped auto-labelling (`"arrival_time"` -\> `"Arrival"`).
 - `tidyr` moved from Suggests to Imports (used by
   [`pivot_events_longer()`](https://jaspercain01.github.io/event-driven-visualisation/reference/pivot_events_longer.md)).
 - Internal: timestamp coercion extracted from `validate_event_log()`
@@ -370,9 +436,8 @@ other being the Stage 1f palette): broken behaviour is not API surface.
 
 ### Stage 1 — Visual quick wins
 
-New opt-in features on
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md),
-each defaulting to prior behaviour:
+New opt-in features on `plot_patient_journey()`, each defaulting to
+prior behaviour:
 
 - `show_duration` — formatted duration label above each non-terminal
   box; boxes with an inferred end get a `"+"` suffix (1a).

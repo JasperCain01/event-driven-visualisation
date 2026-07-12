@@ -8,9 +8,9 @@ library(eventviz)
 Not every event log has a spatial component. A complaint moves through
 fixed handling stages; a support ticket moves through fixed statuses; a
 purchase order moves through fixed approval steps. None of these cases
-occupy a physical *location* — but each occupies exactly one *stage*
+occupy a physical *location* — but each occupies exactly one *state*
 exclusively at a time, which is exactly the structure
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)’s
+[`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md)’s
 box derivation was built for. This vignette uses the bundled
 `complaint_example` and `support_ticket_example` datasets to show both
 ways of visualising a linear process, and when to reach for each.
@@ -19,8 +19,7 @@ ways of visualising a linear process, and when to reach for each.
 
 `complaint_example` has eight complaints moving through Acknowledgement
 -\> Triage -\> Assigned -\> Under review -\> Senior review -\> Formal
-letter sent, recorded as `act_type = "stage_change"`, with no patient
-column at all:
+letter sent, recorded as `act_type = "stage_change"`:
 
 ``` r
 
@@ -37,22 +36,21 @@ head(complaint_example)
 `support_ticket_example` is the same shape for a support-ticket
 lifecycle (Open -\> Assigned -\> In Progress -\> Waiting on Customer -\>
 Resolved -\> Closed) — deliberately non-healthcare, to prove the package
-isn’t NHS-specific.
+isn’t tied to any one domain.
 
 ## Band layout: “what happened when”
 
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
+[`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md)
 works unmodified — `stage_change`/`status_change` plays the role
-`location_move` usually plays, `patient_col = NULL` because there’s no
-secondary identifier, and `state_label` relabels the fill legend from
-“Location” to something that fits:
+`location_move` usually plays via `state_events`, and `state_label`
+relabels the fill legend from “State” to something that fits:
 
 ``` r
 
-plot_patient_journey(
+plot_case_timeline(
   complaint_example, case_id = "CMP-01",
-  location_categories = "stage_change", case_col = "complaint_id",
-  patient_col = NULL, terminal_activities = "Formal letter sent",
+  state_events = "stage_change", case_col = "complaint_id",
+  terminal_activities = "Formal letter sent",
   state_label = "Stage"
 )
 ```
@@ -61,14 +59,14 @@ plot_patient_journey(
 
 This is the right view for “what happened, and when” — the point events
 (`contact`, `escalation`, `evidence_received`) sit on the timeline
-exactly as clinical point events would.
+exactly like any other point event.
 
 ## Staircase layout: “where does the time go”
 
 For a linear process, the more compelling question is usually *where the
 time goes* — which stage is eating the SLA.
 [`plot_stage_ladder()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.md)
-puts stage on the y-axis (first stage at the top) and draws one
+puts the state on the y-axis (first stage at the top) and draws one
 horizontal segment per stage, so the case walks down-and-right like a
 Gantt chart:
 
@@ -76,7 +74,7 @@ Gantt chart:
 
 plot_stage_ladder(
   complaint_example, case_id = "CMP-01",
-  stage_categories = "stage_change", case_col = "complaint_id"
+  state_events = "stage_change", case_col = "complaint_id"
 )
 ```
 
@@ -90,7 +88,7 @@ uniform box heights don’t:
 
 plot_stage_ladder(
   complaint_example, case_id = "CMP-03",
-  stage_categories = "stage_change", case_col = "complaint_id"
+  state_events = "stage_change", case_col = "complaint_id"
 )
 ```
 
@@ -106,7 +104,7 @@ with any dwell beyond it redrawn in firebrick:
 
 plot_stage_ladder(
   complaint_example, case_id = "CMP-03",
-  stage_categories = "stage_change", case_col = "complaint_id",
+  state_events = "stage_change", case_col = "complaint_id",
   stage_targets = c("Under review" = 24 * 7)   # one week
 )
 ```
@@ -117,18 +115,18 @@ plot_stage_ladder(
 
 `support_ticket_example`’s `"TCK-04"` never reaches `"Closed"` — the
 data feed simply stops. Passing `terminal_activities` tells
-[`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md)
+[`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md)
 what “done” looks like, so it can tell the difference between a
-completed spell and one still in flight; a case that hasn’t reached a
+completed case and one still in flight; a case that hasn’t reached a
 terminal state gets its final box drawn open (a dashed edge with an
 italic `"(ongoing)"` label) instead of silently inventing an end for it:
 
 ``` r
 
-plot_patient_journey(
+plot_case_timeline(
   support_ticket_example, case_id = "TCK-04",
-  location_categories = "status_change", case_col = "ticket_id",
-  patient_col = NULL, terminal_activities = "Closed", state_label = "Status"
+  state_events = "status_change", case_col = "ticket_id",
+  terminal_activities = "Closed", state_label = "Status"
 )
 ```
 
@@ -137,8 +135,8 @@ plot_patient_journey(
 ## Which view should I use?
 
 - **Band layout**
-  ([`plot_patient_journey()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.md))
-  when you want the point events on the same timeline as the stage
+  ([`plot_case_timeline()`](https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.md))
+  when you want the point events on the same timeline as the state
   moves, or you’re comparing this process against genuinely spatial ones
   in the same report.
 - **Staircase**

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,78 +70,82 @@
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jaspercain01.github.io/event-driven-visualisation/">eventviz</a></span><span class="op">)</span></span></code></pre></div>
 <p>This vignette walks through <code>eventviz</code>’s core function,
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>, on the bundled
-<code>example_journey</code> dataset: a synthetic patient spell moving
+<code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>, on the bundled
+<code>example_journey</code> dataset: a synthetic patient case moving
 through Ambulance arrival, Emergency Department, Acute Medical Unit,
 Discharge Lounge, and Discharged, with clinical point events
 (observations, tests, doctor reviews) sprinkled throughout.</p>
 <div class="section level2">
 <h2 id="the-shape-of-an-event-log">The shape of an event log<a class="anchor" aria-label="anchor" href="#the-shape-of-an-event-log"></a>
 </h2>
-<p><code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> expects one row per event, with
-(at minimum) a case identifier, a timestamp, an event-type column
-marking which rows are <em>moves</em> to a new exclusive state, and an
-activity/label column:</p>
+<p><code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code> expects one row per event, with (at
+minimum) a case identifier, a timestamp, an event-type column marking
+which rows open a new exclusive state, and an activity/label column:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">example_journey</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   caseID K_Number           timestamp         act_type</span></span>
-<span><span class="co">#&gt; 1 SP-001   K12345 2024-03-15 08:30:00 ed_location_move</span></span>
-<span><span class="co">#&gt; 2 SP-001   K12345 2024-03-15 08:36:00     clerk_review</span></span>
-<span><span class="co">#&gt; 3 SP-001   K12345 2024-03-15 08:45:00           triage</span></span>
-<span><span class="co">#&gt; 4 SP-001   K12345 2024-03-15 09:15:00              obs</span></span>
-<span><span class="co">#&gt; 5 SP-001   K12345 2024-03-15 09:30:00     clerk_review</span></span>
-<span><span class="co">#&gt; 6 SP-001   K12345 2024-03-15 09:45:00     test_ordered</span></span>
-<span><span class="co">#&gt;                        activity</span></span>
-<span><span class="co">#&gt; 1          Emergency Department</span></span>
-<span><span class="co">#&gt; 2 Ambulance handover documented</span></span>
-<span><span class="co">#&gt; 3  Triage complete - Category 2</span></span>
-<span><span class="co">#&gt; 4    BP 145/90, HR 88, SpO2 97%</span></span>
-<span><span class="co">#&gt; 5    Initial nursing assessment</span></span>
-<span><span class="co">#&gt; 6       FBC, U&amp;E, CRP, Troponin</span></span></code></pre></div>
+<span><span class="co">#&gt;   case_id           timestamp         act_type                      activity</span></span>
+<span><span class="co">#&gt; 1  SP-001 2024-03-15 08:30:00 ed_location_move          Emergency Department</span></span>
+<span><span class="co">#&gt; 2  SP-001 2024-03-15 08:36:00     clerk_review Ambulance handover documented</span></span>
+<span><span class="co">#&gt; 3  SP-001 2024-03-15 08:45:00           triage  Triage complete - Category 2</span></span>
+<span><span class="co">#&gt; 4  SP-001 2024-03-15 09:15:00              obs    BP 145/90, HR 88, SpO2 97%</span></span>
+<span><span class="co">#&gt; 5  SP-001 2024-03-15 09:30:00     clerk_review    Initial nursing assessment</span></span>
+<span><span class="co">#&gt; 6  SP-001 2024-03-15 09:45:00     test_ordered       FBC, U&amp;E, CRP, Troponin</span></span></code></pre></div>
 <p>Here <code>act_type == "ed_location_move"</code> or
 <code>"location_move"</code> marks a move to a new location; everything
 else (<code>obs</code>, <code>clerk_review</code>,
 <code>test_ordered</code>, …) is an instantaneous point event that gets
-plotted on the timeline but doesn’t create a new box.</p>
+plotted on the timeline but doesn’t create a new box. You tell
+<code>eventviz</code> which values open a state via
+<code>state_events</code> — there’s no default, and no guessing: if you
+omit it, the error lists exactly what’s in your data.</p>
 </div>
 <div class="section level2">
 <h2 id="the-default-plot">The default plot<a class="anchor" aria-label="anchor" href="#the-default-plot"></a>
 </h2>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span><span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">example_journey</span>,</span>
+<span>                   state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> `case_id` not supplied; using the only case <span style="color: #0000BB;">"SP-001"</span>.</span></span></code></pre></div>
 <p><img src="getting-started_files/figure-html/default-1.png" class="r-plt" alt="" width="768"></p>
-<p>Each coloured box is a location the case occupied over an interval;
-each point is an instantaneous event, positioned on the midline of
-whichever box it fell inside. The legend splits location fills from
-event-type shapes/colours so the two never share a hue by default (the
-colourblind-safe <code>"okabe"</code> palette — see
-<code>?journey_palette</code> for the <code>"brewer"</code>
-alternative).</p>
+<p><code>example_journey</code> has only one case, so
+<code>case_id</code> didn’t need to be supplied — <code>eventviz</code>
+used the only one available and said so. Each coloured box is a state
+the case occupied over an interval; each point is an instantaneous
+event, positioned on the midline of whichever box it fell inside. The
+legend splits state fills from event-type shapes/colours so the two
+never share a hue by default (the colourblind-safe <code>"okabe"</code>
+palette — see <code>?journey_palette</code> for the
+<code>"brewer"</code> alternative).</p>
 </div>
 <div class="section level2">
 <h2 id="duration-labels">Duration labels<a class="anchor" aria-label="anchor" href="#duration-labels"></a>
 </h2>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span><span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>, show_duration <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">example_journey</span>,</span>
+<span>                   state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
+<span>                   show_duration <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> `case_id` not supplied; using the only case <span style="color: #0000BB;">"SP-001"</span>.</span></span></code></pre></div>
 <p><img src="getting-started_files/figure-html/show-duration-1.png" class="r-plt" alt="" width="768"></p>
 <p>The formatted duration appears above each non-terminal box. If a
 box’s end time had to be <em>inferred</em> (the data feed stopped before
-recording the next move), its label carries a trailing <code>"+"</code>
-so the plot never overclaims precision it doesn’t have.</p>
+recording the next state event), its label carries a trailing
+<code>"+"</code> so the plot never overclaims precision it doesn’t
+have.</p>
 </div>
 <div class="section level2">
 <h2 id="terminal-states">Terminal states<a class="anchor" aria-label="anchor" href="#terminal-states"></a>
 </h2>
-<p>Without more information, the final box in a spell has no natural end
-— <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> has to infer one (by default,
-extending to the last recorded event). For a spell that reaches a
+<p>Without more information, the final box in a case has no natural end
+— <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code> has to infer one (by default,
+extending to the last recorded event). For a case that reaches a
 genuinely <em>terminal</em> state — “Discharged”, “Closed”, “Formal
 letter sent” — that inference is wrong: the case didn’t spend hours
 “being Discharged”. Tell the function which activities are terminal and
 it renders them as an instantaneous marker instead:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
 <span>  terminal_activities <span class="op">=</span> <span class="st">"Discharged"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="getting-started_files/figure-html/terminal-1.png" class="r-plt" alt="" width="768"></p>
@@ -158,13 +162,14 @@ still-open ticket.</p>
 <p>Overlay a target/threshold line — useful for service standards like a
 4-hour ED target:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
 <span>  reference_lines <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>offset_hours <span class="op">=</span> <span class="fl">4</span>, label <span class="op">=</span> <span class="st">"4h target"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="getting-started_files/figure-html/reference-lines-1.png" class="r-plt" alt="" width="768"></p>
 <p><code>reference_lines</code> takes a data frame with one row per
-line: <code>offset_hours</code> (numeric, hours from the spell’s first
+line: <code>offset_hours</code> (numeric, hours from the case’s first
 event) and <code>label</code>.</p>
 </div>
 <div class="section level2">
@@ -175,8 +180,9 @@ each box directly at its centre, and <code>event_type_top_n</code>
 collapses a long tail of rare event types into <code>"Other"</code> so
 the legend stays readable:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
 <span>  label_boxes      <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  event_type_top_n <span class="op">=</span> <span class="fl">3</span></span>
 <span><span class="op">)</span></span>
@@ -191,23 +197,27 @@ the legend stays readable:</p>
 alongside the plot — useful for debugging, or for building your own
 custom visualisation on top of the same box/event derivation:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span><span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>, return_data <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
+<span>  <span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
+<span>  return_data <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "plot"    "boxes"   "events"  "summary"</span></span>
 <span><span class="va">res</span><span class="op">$</span><span class="va">summary</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 4 × 7</span></span></span>
-<span><span class="co">#&gt;   case_id location         xmin                xmax                duration_secs</span></span>
+<span><span class="co">#&gt;   case_id state            xmin                xmax                duration_secs</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>            <span style="color: #949494; font-style: italic;">&lt;dttm&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;dttm&gt;</span>                      <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> SP-001  Emergency Depar… 2024-03-15 <span style="color: #949494;">08:30:00</span> 2024-03-15 <span style="color: #949494;">13:15:00</span>         <span style="text-decoration: underline;">17</span>100</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> SP-001  Acute Medical U… 2024-03-15 <span style="color: #949494;">13:15:00</span> 2024-03-16 <span style="color: #949494;">11:30:00</span>         <span style="text-decoration: underline;">80</span>100</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> SP-001  Discharge Lounge 2024-03-16 <span style="color: #949494;">11:30:00</span> 2024-03-16 <span style="color: #949494;">15:00:00</span>         <span style="text-decoration: underline;">12</span>600</span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">4</span> SP-001  Discharged       2024-03-16 <span style="color: #949494;">15:00:00</span> 2024-03-16 <span style="color: #949494;">19:45:00</span>         <span style="text-decoration: underline;">17</span>100</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># ℹ 2 more variables: end_inferred &lt;lgl&gt;, terminal &lt;lgl&gt;</span></span></span></code></pre></div>
-<p><code>summary</code> is one row per location stay (case, location,
+<p><code>summary</code> is one row per state stay (case, state,
 entry/exit, duration, and whether the end was inferred) — the same shape
-<code><a href="../reference/summarise_journey_durations.html">summarise_journey_durations()</a></code> returns across a whole
-cohort. See the <a href="cohort-analysis.html">cohort analysis</a>
-vignette for more on aggregating across cases.</p>
+<code><a href="../reference/summarise_case_durations.html">summarise_case_durations()</a></code> returns across a whole cohort.
+See the <a href="cohort-analysis.html">cohort analysis</a> vignette for
+more on aggregating across cases.</p>
 </div>
 <div class="section level2">
 <h2 id="next-steps">Next steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,29 +69,54 @@
     
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jaspercain01.github.io/event-driven-visualisation/">eventviz</a></span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>’s defaults
-(<code>case_col = "caseID"</code>, <code>time_col = "timestamp"</code>,
-…) match <code>example_journey</code>’s column names, but your own data
-almost certainly uses different ones — and might not even be in the
-right <em>shape</em> yet. This vignette covers both problems: matching
-column names via a schema, and reshaping wide milestone data into the
-long form eventviz expects.</p>
+<p>Every <code>eventviz</code> plotting function needs exactly one thing
+you must always declare yourself: <code>state_events</code>, the
+<code>act_type</code> value(s) that open a state. There’s no default,
+and no value-level guessing — if you omit it, the error tells you what’s
+actually in your data:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">orders</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  case_id   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A-1"</span>, <span class="st">"A-1"</span>, <span class="st">"A-1"</span><span class="op">)</span>,</span>
+<span>  timestamp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="st">"2026-01-01"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">3600</span>, <span class="fl">7200</span><span class="op">)</span>,</span>
+<span>  act_type  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"status"</span>, <span class="st">"note"</span>, <span class="st">"status"</span><span class="op">)</span>,</span>
+<span>  activity  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Raised"</span>, <span class="st">"Chased supplier"</span>, <span class="st">"Approved"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">orders</span>, case_id <span class="op">=</span> <span class="st">"A-1"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `require_state_events()`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> `state_events` is required: name the <span style="color: #00BB00;">act_type</span> value(s) that open a</span></span>
+<span><span class="co">#&gt;   state (a long-running condition), as opposed to point-in-time events.</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Distinct <span style="color: #00BB00;">act_type</span> values in `data`: "status" (2 rows), "note" (1 row)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Example: `state_events = "status"`</span></span></code></pre></div>
+<p>The listing is ordered by frequency, so the value you almost
+certainly want is usually first:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">orders</span>, case_id <span class="op">=</span> <span class="st">"A-1"</span>, state_events <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="adapting-your-data_files/figure-html/discovery-fixed-1.png" class="r-plt" alt="" width="768"></p>
+<p>Beyond <code>state_events</code>, <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>’s
+column-name defaults (<code>case_col = "case_id"</code>,
+<code>time_col = "timestamp"</code>, …) match a lot of data out of the
+box, but your own data almost certainly uses different names — and might
+not even be in the right <em>shape</em> yet. This vignette covers both
+problems: matching column names via a schema, and reshaping wide
+milestone data into the long form eventviz expects.</p>
 <div class="section level2">
 <h2 id="column-name-schemas">Column-name schemas<a class="anchor" aria-label="anchor" href="#column-name-schemas"></a>
 </h2>
 <p>You can always pass column names individually:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
-<span>  <span class="va">my_data</span>, case_id <span class="op">=</span> <span class="st">"12345"</span>,</span>
-<span>  time_col <span class="op">=</span> <span class="st">"ts"</span>, case_col <span class="op">=</span> <span class="st">"spell_id"</span>, act_type_col <span class="op">=</span> <span class="st">"category"</span>,</span>
-<span>  activity_col <span class="op">=</span> <span class="st">"label"</span>, patient_col <span class="op">=</span> <span class="st">"mrn"</span></span>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
+<span>  <span class="va">my_data</span>, case_id <span class="op">=</span> <span class="st">"12345"</span>, state_events <span class="op">=</span> <span class="st">"status"</span>,</span>
+<span>  time_col <span class="op">=</span> <span class="st">"ts"</span>, case_col <span class="op">=</span> <span class="st">"record_id"</span>, act_type_col <span class="op">=</span> <span class="st">"category"</span>,</span>
+<span>  activity_col <span class="op">=</span> <span class="st">"label"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>For a dataset you’ll plot repeatedly, bundle the mapping into an
 <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> once and reuse it:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">my_schema</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/event_log_schema.html">event_log_schema</a></span><span class="op">(</span></span>
-<span>  time_col <span class="op">=</span> <span class="st">"ts"</span>, case_col <span class="op">=</span> <span class="st">"spell_id"</span>,</span>
-<span>  act_type_col <span class="op">=</span> <span class="st">"category"</span>, activity_col <span class="op">=</span> <span class="st">"label"</span>, patient_col <span class="op">=</span> <span class="st">"mrn"</span></span>
+<span>  time_col <span class="op">=</span> <span class="st">"ts"</span>, case_col <span class="op">=</span> <span class="st">"record_id"</span>,</span>
+<span>  act_type_col <span class="op">=</span> <span class="st">"category"</span>, activity_col <span class="op">=</span> <span class="st">"label"</span>,</span>
+<span>  state_events <span class="op">=</span> <span class="st">"status"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">my_schema</span></span>
 <span><span class="co">#&gt; </span></span>
@@ -99,64 +124,56 @@ long form eventviz expects.</p>
 <span><span class="co">#&gt; <span style="font-weight: bold;">time_col</span>: ts</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">act_type_col</span>: category</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">activity_col</span>: label</span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">case_col</span>: spell_id</span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">patient_col</span>: mrn</span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">location_categories</span>: &lt;not set&gt;</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="font-weight: bold;">case_col</span>: record_id</span></span>
+<span><span class="co">#&gt; <span style="font-weight: bold;">state_events</span>: status</span></span></code></pre></div>
 <p>Pass it as <code>schema = my_schema</code>; any individual argument
 you <em>also</em> supply still wins over the schema, and anything
-neither supplies falls through to <code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>’s
+neither supplies falls through to <code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>’s
 own defaults.</p>
 <div class="section level3">
 <h3 id="autodetection">Autodetection<a class="anchor" aria-label="anchor" href="#autodetection"></a>
 </h3>
 <p>If your column names are already conventional
 (<code>timestamp</code>/<code>time</code>,
-<code>case_id</code>/<code>spell_id</code>/<code>episode_id</code>,
+<code>case_id</code>/<code>record_id</code>/<code>episode_id</code>,
 <code>act_type</code>/<code>event_type</code>,
-<code>activity</code>/<code>label</code>,
-<code>patient_id</code>/<code>mrn</code>, …), you don’t have to name
+<code>activity</code>/<code>label</code>, …), you don’t have to name
 them at all. <code><a href="../reference/autodetect_schema.html">autodetect_schema()</a></code> matches column names
 against built-in candidate lists — exact case-insensitive match first,
 then a fuzzy edit-distance match — and resolves roles in a fixed order
 so one column is never silently claimed by two roles:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/autodetect_schema.html">autodetect_schema</a></span><span class="op">(</span><span class="va">example_journey</span><span class="op">)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">time_col</span> = <span style="color: #0000BB;">"timestamp"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">case_col</span> = <span style="color: #0000BB;">"caseID"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">act_type_col</span> = <span style="color: #0000BB;">"act_type"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">activity_col</span> = <span style="color: #0000BB;">"activity"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">patient_col</span> = <span style="color: #0000BB;">"K_Number"</span> (exact match).</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; ── &lt;event_log_schema&gt; </span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">time_col</span>: timestamp</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">act_type_col</span>: act_type</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">activity_col</span>: activity</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">case_col</span>: caseID</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">patient_col</span>: K_Number</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; <span style="font-weight: bold;">location_categories</span>: &lt;not set&gt;</span></span></code></pre></div>
-<p>Notice <code>caseID</code> and <code>K_Number</code> were matched
-fuzzily even though they don’t exactly match the candidate lists
-(<code>case_id</code>, <code>patient_id</code>, …). To use autodetection
-inline rather than as a separate step, pass the literal string
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">renamed</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  case_idx  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A-1"</span>, <span class="st">"A-1"</span><span class="op">)</span>,</span>
+<span>  event_ts  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="st">"2026-01-01"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">3600</span><span class="op">)</span>,</span>
+<span>  act_typ   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"status"</span>, <span class="st">"note"</span><span class="op">)</span>,</span>
+<span>  activty   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Raised"</span>, <span class="st">"Chased supplier"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/autodetect_schema.html">autodetect_schema</a></span><span class="op">(</span><span class="va">renamed</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;"> in `autodetect_schema()`:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> Could not autodetect column(s) for: <span style="color: #00BB00;">time_col</span>.</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> Columns available to match against: <span style="color: #0000BB;">"case_idx"</span>, <span style="color: #0000BB;">"event_ts"</span>, <span style="color: #0000BB;">"act_typ"</span>, and</span></span>
+<span><span class="co">#&gt;   <span style="color: #0000BB;">"activty"</span></span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Supply an explicit `event_log_schema()` for the field(s) autodetection could</span></span>
+<span><span class="co">#&gt;   not resolve.</span></span></code></pre></div>
+<p><code>case_idx</code>, <code>event_ts</code>, <code>act_typ</code>,
+and <code>activty</code> were all matched fuzzily even though none
+exactly match the candidate lists. To use autodetection inline rather
+than as a separate step, pass the literal string
 <code>schema = "auto"</code> — this is the <em>only</em> way
 autodetection runs; a manually-constructed
 <code><a href="../reference/event_log_schema.html">event_log_schema()</a></code> never triggers it, and omitting
 <code>schema</code> entirely just uses the function’s hardcoded
 defaults:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span><span class="va">example_journey</span>, case_id <span class="op">=</span> <span class="st">"SP-001"</span>, schema <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span><span class="va">example_journey</span>,</span>
+<span>                   state_events <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"location_move"</span>, <span class="st">"ed_location_move"</span><span class="op">)</span>,</span>
+<span>                   schema <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">time_col</span> = <span style="color: #0000BB;">"timestamp"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">case_col</span> = <span style="color: #0000BB;">"caseID"</span> (exact match).</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">case_col</span> = <span style="color: #0000BB;">"case_id"</span> (exact match).</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">act_type_col</span> = <span style="color: #0000BB;">"act_type"</span> (exact match).</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">activity_col</span> = <span style="color: #0000BB;">"activity"</span> (exact match).</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Autodetected <span style="color: #00BB00;">patient_col</span> = <span style="color: #0000BB;">"K_Number"</span> (exact match).</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> `case_id` not supplied; using the only case <span style="color: #0000BB;">"SP-001"</span>.</span></span></code></pre></div>
 <p><img src="adapting-your-data_files/figure-html/autodetect-inline-1.png" class="r-plt" alt="" width="768"></p>
 <p>If two candidate columns tie for one role, or a required role can’t
 be resolved at all, <code><a href="../reference/autodetect_schema.html">autodetect_schema()</a></code> aborts naming the
@@ -169,57 +186,58 @@ problem rather than guessing — at that point, fall back to an explicit
 </h2>
 <p>Some source systems export one row <em>per case</em> with a column
 per milestone timestamp, rather than one row per event:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">wide</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  case_id        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"C"</span><span class="op">)</span>,</span>
-<span>  diagnosis      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Chest pain"</span>, <span class="st">"Fall"</span>, <span class="st">"Sepsis"</span><span class="op">)</span>,</span>
-<span>  arrival_time   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 08:00"</span>, <span class="st">"2024-01-01 09:15"</span>, <span class="st">"2024-01-01 10:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span>
+<span>  category       <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Hardware"</span>, <span class="st">"Software"</span>, <span class="st">"Access"</span><span class="op">)</span>,</span>
+<span>  received_time  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 08:00"</span>, <span class="st">"2024-01-01 09:15"</span>, <span class="st">"2024-01-01 10:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span>
 <span>  triage_time    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 08:10"</span>, <span class="st">"2024-01-01 09:20"</span>, <span class="st">"2024-01-01 10:05"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span>
-<span>  ward_time      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 11:30"</span>, <span class="cn">NA</span>,                  <span class="st">"2024-01-01 13:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span>
-<span>  discharge_time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 18:00"</span>, <span class="st">"2024-01-01 12:00"</span>,  <span class="st">"2024-01-02 09:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span></span>
+<span>  review_time    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 11:30"</span>, <span class="cn">NA</span>,                  <span class="st">"2024-01-01 13:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span>
+<span>  closed_time    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2024-01-01 18:00"</span>, <span class="st">"2024-01-01 12:00"</span>,  <span class="st">"2024-01-02 09:00"</span><span class="op">)</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">wide</span></span>
-<span><span class="co">#&gt;   case_id  diagnosis        arrival_time         triage_time</span></span>
-<span><span class="co">#&gt; 1       A Chest pain 2024-01-01 08:00:00 2024-01-01 08:10:00</span></span>
-<span><span class="co">#&gt; 2       B       Fall 2024-01-01 09:15:00 2024-01-01 09:20:00</span></span>
-<span><span class="co">#&gt; 3       C     Sepsis 2024-01-01 10:00:00 2024-01-01 10:05:00</span></span>
-<span><span class="co">#&gt;             ward_time      discharge_time</span></span>
-<span><span class="co">#&gt; 1 2024-01-01 11:30:00 2024-01-01 18:00:00</span></span>
-<span><span class="co">#&gt; 2                &lt;NA&gt; 2024-01-01 12:00:00</span></span>
-<span><span class="co">#&gt; 3 2024-01-01 13:00:00 2024-01-02 09:00:00</span></span></code></pre></div>
+<span><span class="co">#&gt;   case_id category       received_time         triage_time         review_time</span></span>
+<span><span class="co">#&gt; 1       A Hardware 2024-01-01 08:00:00 2024-01-01 08:10:00 2024-01-01 11:30:00</span></span>
+<span><span class="co">#&gt; 2       B Software 2024-01-01 09:15:00 2024-01-01 09:20:00                &lt;NA&gt;</span></span>
+<span><span class="co">#&gt; 3       C   Access 2024-01-01 10:00:00 2024-01-01 10:05:00 2024-01-01 13:00:00</span></span>
+<span><span class="co">#&gt;           closed_time</span></span>
+<span><span class="co">#&gt; 1 2024-01-01 18:00:00</span></span>
+<span><span class="co">#&gt; 2 2024-01-01 12:00:00</span></span>
+<span><span class="co">#&gt; 3 2024-01-02 09:00:00</span></span></code></pre></div>
 <p><code><a href="../reference/pivot_events_longer.html">pivot_events_longer()</a></code> reshapes this into the long form
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code> needs, in one call. Name which of
-the pivoted columns represent physical location moves via
-<code>location_cols</code> (everything else pivoted becomes a point
-event by default), and any non-pivoted columns (like
-<code>diagnosis</code> here) pass through untouched:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code> needs, in one call. Name which of the
+pivoted columns mark a state change via <code>state_cols</code> — they
+emit <code>act_type = "state_change"</code>, which is exactly what you
+then pass as <code>state_events</code> (everything else pivoted becomes
+a point event by default), and any non-pivoted columns (like
+<code>category</code> here) pass through untouched:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pivot_events_longer.html">pivot_events_longer</a></span><span class="op">(</span></span>
 <span>  <span class="va">wide</span>,</span>
-<span>  case_col      <span class="op">=</span> <span class="st">"case_id"</span>,</span>
-<span>  time_cols     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"arrival_time"</span>, <span class="st">"triage_time"</span>, <span class="st">"ward_time"</span>, <span class="st">"discharge_time"</span><span class="op">)</span>,</span>
-<span>  location_cols <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"arrival_time"</span>, <span class="st">"ward_time"</span>, <span class="st">"discharge_time"</span><span class="op">)</span></span>
+<span>  case_col   <span class="op">=</span> <span class="st">"case_id"</span>,</span>
+<span>  time_cols  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"received_time"</span>, <span class="st">"triage_time"</span>, <span class="st">"review_time"</span>, <span class="st">"closed_time"</span><span class="op">)</span>,</span>
+<span>  state_cols <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"received_time"</span>, <span class="st">"review_time"</span>, <span class="st">"closed_time"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> Dropped 1 row(s) with NA <span style="color: #00BB00;">timestamp</span> (milestone did not occur for that case):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> <span style="color: #00BB00;">ward_time</span>: 1 row(s)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> <span style="color: #00BB00;">review_time</span>: 1 row(s)</span></span>
 <span><span class="va">long</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 11 × 5</span></span></span>
-<span><span class="co">#&gt;    case_id timestamp           act_type      activity  diagnosis </span></span>
-<span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dttm&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>     </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 1</span> A       2024-01-01 <span style="color: #949494;">08:00:00</span> location_move Arrival   Chest pain</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 2</span> A       2024-01-01 <span style="color: #949494;">08:10:00</span> triage_time   Triage    Chest pain</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 3</span> A       2024-01-01 <span style="color: #949494;">11:30:00</span> location_move Ward      Chest pain</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 4</span> A       2024-01-01 <span style="color: #949494;">18:00:00</span> location_move Discharge Chest pain</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 5</span> B       2024-01-01 <span style="color: #949494;">09:15:00</span> location_move Arrival   Fall      </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 6</span> B       2024-01-01 <span style="color: #949494;">09:20:00</span> triage_time   Triage    Fall      </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 7</span> B       2024-01-01 <span style="color: #949494;">12:00:00</span> location_move Discharge Fall      </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 8</span> C       2024-01-01 <span style="color: #949494;">10:00:00</span> location_move Arrival   Sepsis    </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> C       2024-01-01 <span style="color: #949494;">10:05:00</span> triage_time   Triage    Sepsis    </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span> C       2024-01-01 <span style="color: #949494;">13:00:00</span> location_move Ward      Sepsis    </span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">11</span> C       2024-01-02 <span style="color: #949494;">09:00:00</span> location_move Discharge Sepsis</span></span></code></pre></div>
+<span><span class="co">#&gt;    case_id timestamp           act_type     activity category</span></span>
+<span><span class="co">#&gt;    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dttm&gt;</span>              <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 1</span> A       2024-01-01 <span style="color: #949494;">08:00:00</span> state_change Received Hardware</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 2</span> A       2024-01-01 <span style="color: #949494;">08:10:00</span> triage_time  Triage   Hardware</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 3</span> A       2024-01-01 <span style="color: #949494;">11:30:00</span> state_change Review   Hardware</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 4</span> A       2024-01-01 <span style="color: #949494;">18:00:00</span> state_change Closed   Hardware</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 5</span> B       2024-01-01 <span style="color: #949494;">09:15:00</span> state_change Received Software</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 6</span> B       2024-01-01 <span style="color: #949494;">09:20:00</span> triage_time  Triage   Software</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 7</span> B       2024-01-01 <span style="color: #949494;">12:00:00</span> state_change Closed   Software</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 8</span> C       2024-01-01 <span style="color: #949494;">10:00:00</span> state_change Received Access  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;"> 9</span> C       2024-01-01 <span style="color: #949494;">10:05:00</span> triage_time  Triage   Access  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">10</span> C       2024-01-01 <span style="color: #949494;">13:00:00</span> state_change Review   Access  </span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">11</span> C       2024-01-02 <span style="color: #949494;">09:00:00</span> state_change Closed   Access</span></span></code></pre></div>
 <p>Two things happened automatically:</p>
 <ul>
-<li>Case B’s missing <code>ward_time</code> (<code>NA</code>) was
+<li>Case B’s missing <code>review_time</code> (<code>NA</code>) was
 dropped with a message, rather than becoming a bogus event at a missing
 timestamp — an <code>NA</code> milestone means “didn’t happen for this
 case”, not an error.</li>
@@ -232,13 +250,13 @@ title-casing what’s left: <code>"arrival_time"</code> became
 <p>Override either behaviour with
 <code>act_type_map</code>/<code>activity_map</code> (named vectors from
 a <code>time_cols</code> entry to your preferred value) if the
-auto-derived labels aren’t what you want. The result feeds straight into
-<code><a href="../reference/plot_patient_journey.html">plot_patient_journey()</a></code>:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span>
+auto-derived labels aren’t what you want. The pivot and the plot agree
+out of the box — the result feeds straight into
+<code><a href="../reference/plot_case_timeline.html">plot_case_timeline()</a></code>:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span>
 <span>  <span class="va">long</span>, case_id <span class="op">=</span> <span class="st">"A"</span>,</span>
-<span>  case_col <span class="op">=</span> <span class="st">"case_id"</span>, location_categories <span class="op">=</span> <span class="st">"location_move"</span>,</span>
-<span>  patient_col <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  case_col <span class="op">=</span> <span class="st">"case_id"</span>, state_events <span class="op">=</span> <span class="st">"state_change"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="adapting-your-data_files/figure-html/pivot-plot-1.png" class="r-plt" alt="" width="768"></p>
 </div>

@@ -3,19 +3,19 @@
 through the fixed stages Acknowledgement -&amp;gt; Triage -&amp;gt; Assigned -&amp;gt; Under
 review -&amp;gt; Senior review -&amp;gt; Formal letter sent, recorded as
 `act_type = "stage_change"`), used to exercise the linear stage-process
-features (`patient_col = NULL`, [plot_stage_ladder()]). Sprinkled point
-events (`contact`, `escalation`, `evidence_received`) exercise the
-instantaneous-event path. Complaint `"CMP-03"` stalls about three weeks in
-"Under review" (a per-stage breach); `"CMP-04"` is still open and never
-reaches the formal letter, exercising the ongoing-spell indication.'><meta property="og:description" content='A deliberately non-spatial event log (eight complaints, each moving
+features ([plot_stage_ladder()]). Sprinkled point events (`contact`,
+`escalation`, `evidence_received`) exercise the instantaneous-event path.
+Complaint `"CMP-03"` stalls about three weeks in "Under review" (a
+per-state breach); `"CMP-04"` is still open and never reaches the formal
+letter, exercising the ongoing-case indication.'><meta property="og:description" content='A deliberately non-spatial event log (eight complaints, each moving
 through the fixed stages Acknowledgement -&amp;gt; Triage -&amp;gt; Assigned -&amp;gt; Under
 review -&amp;gt; Senior review -&amp;gt; Formal letter sent, recorded as
 `act_type = "stage_change"`), used to exercise the linear stage-process
-features (`patient_col = NULL`, [plot_stage_ladder()]). Sprinkled point
-events (`contact`, `escalation`, `evidence_received`) exercise the
-instantaneous-event path. Complaint `"CMP-03"` stalls about three weeks in
-"Under review" (a per-stage breach); `"CMP-04"` is still open and never
-reaches the formal letter, exercising the ongoing-spell indication.'></head><body>
+features ([plot_stage_ladder()]). Sprinkled point events (`contact`,
+`escalation`, `evidence_received`) exercise the instantaneous-event path.
+Complaint `"CMP-03"` stalls about three weeks in "Under review" (a
+per-state breach); `"CMP-04"` is still open and never reaches the formal
+letter, exercising the ongoing-case indication.'></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -23,7 +23,7 @@ reaches the formal letter, exercising the ongoing-spell indication.'></head><bod
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,11 +60,11 @@ reaches the formal letter, exercising the ongoing-spell indication.'></head><bod
 through the fixed stages Acknowledgement -&gt; Triage -&gt; Assigned -&gt; Under
 review -&gt; Senior review -&gt; Formal letter sent, recorded as
 `act_type = "stage_change"`), used to exercise the linear stage-process
-features (`patient_col = NULL`, [plot_stage_ladder()]). Sprinkled point
-events (`contact`, `escalation`, `evidence_received`) exercise the
-instantaneous-event path. Complaint `"CMP-03"` stalls about three weeks in
-"Under review" (a per-stage breach); `"CMP-04"` is still open and never
-reaches the formal letter, exercising the ongoing-spell indication.</p>
+features ([plot_stage_ladder()]). Sprinkled point events (`contact`,
+`escalation`, `evidence_received`) exercise the instantaneous-event path.
+Complaint `"CMP-03"` stalls about three weeks in "Under review" (a
+per-state breach); `"CMP-04"` is still open and never reaches the formal
+letter, exercising the ongoing-case indication.</p>
     </div>
 
     <div class="section level2">
@@ -80,16 +80,16 @@ reaches the formal letter, exercising the ongoing-spell indication.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="plot_patient_journey.html">plot_patient_journey</a></span><span class="op">(</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="plot_case_timeline.html">plot_case_timeline</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-01"</span>,</span></span>
-<span class="r-in"><span>  location_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span></span>
-<span class="r-in"><span>  patient_col <span class="op">=</span> <span class="cn">NULL</span>, terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span></span>
+<span class="r-in"><span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span>,</span></span>
+<span class="r-in"><span>  terminal_activities <span class="op">=</span> <span class="st">"Formal letter sent"</span>,</span></span>
 <span class="r-in"><span>  state_label <span class="op">=</span> <span class="st">"Stage"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-plt img"><img src="complaint_example-1.png" alt="" width="700" height="433"></span>
 <span class="r-in"><span><span class="fu"><a href="plot_stage_ladder.html">plot_stage_ladder</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="va">complaint_example</span>, case_id <span class="op">=</span> <span class="st">"CMP-01"</span>,</span></span>
-<span class="r-in"><span>  stage_categories <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span></span>
+<span class="r-in"><span>  state_events <span class="op">=</span> <span class="st">"stage_change"</span>, case_col <span class="op">=</span> <span class="st">"complaint_id"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-plt img"><img src="complaint_example-2.png" alt="" width="700" height="433"></span>
 </code></pre></div>

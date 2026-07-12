@@ -3,6 +3,7 @@
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/IMPLEMENTATION_PLAN.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/LICENSE-text.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/LICENSE.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/REDESIGN_PLAN.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/articles/adapting-your-data.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/articles/cohort-analysis.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/articles/getting-started.html</loc></url>
@@ -18,17 +19,17 @@
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/example_journey.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/index.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/pivot_events_longer.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_cohort.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_journey_with_summary.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_patient_journey.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_case_timeline_with_summary.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_cohort_timeline.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_stage_ladder.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/plot_transition_summary.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/print.event_log_schema.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_breach_rate.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_journey_durations.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_stage_durations.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_case_durations.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_state_durations.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/summarise_transitions.html</loc></url>
 <url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/support_ticket_example.html</loc></url>
-<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/theme_journey.html</loc></url>
+<url><loc>https://jaspercain01.github.io/event-driven-visualisation/reference/theme_timeline.html</loc></url>
 </urlset>
 

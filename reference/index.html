@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventviz</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,7 +40,7 @@
     <div class="section level2">
       <h2 id="plot-a-single-case">Plot a single case<a class="anchor" aria-label="anchor" href="#plot-a-single-case"></a></h2>
 
-      <div class="section-desc"><p>Visualise one case’s event log as a location-band timeline or, for a strictly linear process, a staircase diagram.</p></div>
+      <div class="section-desc"><p>Visualise one case’s event log as a state-band timeline or, for a strictly linear process, a staircase diagram.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -49,10 +49,10 @@
 
       <dl><dt>
 
-          <code><a href="plot_patient_journey.html">plot_patient_journey()</a></code>
+          <code><a href="plot_case_timeline.html">plot_case_timeline()</a></code>
 
         </dt>
-        <dd>Visualise an event log as a location-band timeline</dd>
+        <dd>Visualise an event log as a state-band timeline</dd>
 
         <dt>
 
@@ -63,10 +63,10 @@
 
         <dt>
 
-          <code><a href="plot_journey_with_summary.html">plot_journey_with_summary()</a></code>
+          <code><a href="plot_case_timeline_with_summary.html">plot_case_timeline_with_summary()</a></code>
 
         </dt>
-        <dd>Plot a single case's timeline stacked above its per-stage duration summary</dd>
+        <dd>Plot a single case's timeline stacked above its per-state duration summary</dd>
       </dl></div><div class="section level2">
       <h2 id="compare-a-cohort">Compare a cohort<a class="anchor" aria-label="anchor" href="#compare-a-cohort"></a></h2>
 
@@ -79,24 +79,24 @@
 
       <dl><dt>
 
-          <code><a href="plot_journey_cohort.html">plot_journey_cohort()</a></code>
+          <code><a href="plot_cohort_timeline.html">plot_cohort_timeline()</a></code>
 
         </dt>
         <dd>Visualise several cases as a faceted small-multiples grid</dd>
 
         <dt>
 
-          <code><a href="summarise_journey_durations.html">summarise_journey_durations()</a></code>
+          <code><a href="summarise_case_durations.html">summarise_case_durations()</a></code>
 
         </dt>
         <dd>Summarise per-stay durations across a cohort</dd>
 
         <dt>
 
-          <code><a href="summarise_stage_durations.html">summarise_stage_durations()</a></code>
+          <code><a href="summarise_state_durations.html">summarise_state_durations()</a></code>
 
         </dt>
-        <dd>Summarise per-location duration statistics across a cohort</dd>
+        <dd>Summarise per-state duration statistics across a cohort</dd>
 
         <dt>
 
@@ -110,7 +110,7 @@
           <code><a href="summarise_transitions.html">summarise_transitions()</a></code>
 
         </dt>
-        <dd>Summarise directed location-to-location transitions across a cohort</dd>
+        <dd>Summarise directed state-to-state transitions across a cohort</dd>
 
         <dt>
 
@@ -167,7 +167,7 @@
 
       <dl><dt>
 
-          <code><a href="theme_journey.html">theme_journey()</a></code>
+          <code><a href="theme_timeline.html">theme_timeline()</a></code>
 
         </dt>
         <dd>Shared base ggplot2 theme for eventviz renderers</dd>
