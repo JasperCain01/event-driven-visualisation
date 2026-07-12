@@ -4,8 +4,8 @@
 # (first-appearance and explicit stage_order, plus errors on unknown stages),
 # duration labels, terminal-stage-as-point, and stage_targets band layers. Also
 # exercises the complaint_example dataset end-to-end through BOTH the band layout
-# (plot_patient_journey) and the staircase (plot_stage_ladder), and confirms the
-# still-open complaint triggers the ongoing-spell indication.
+# (plot_case_timeline) and the staircase (plot_stage_ladder), and confirms the
+# still-open complaint triggers the ongoing-case indication.
 #
 # Run with: testthat::test_file("tests/testthat/test-stage-ladder.R")
 
@@ -18,7 +18,7 @@ geom_classes <- function(p) vapply(p$layers, function(l) class(l$geom)[1], chara
 ladder <- function(case_id, ...) {
   suppressMessages(plot_stage_ladder(
     complaint_example, case_id = case_id,
-    stage_categories = "stage_change", case_col = "complaint_id",
+    state_events = "stage_change", case_col = "complaint_id",
     terminal_activities = "Formal letter sent", ...
   ))
 }
@@ -36,7 +36,7 @@ test_that("the staircase renders cleanly (universal gate)", {
 test_that("first stage sits at the top (highest y) by first appearance", {
   res <- suppressMessages(plot_stage_ladder(
     complaint_example, case_id = "CMP-01",
-    stage_categories = "stage_change", case_col = "complaint_id",
+    state_events = "stage_change", case_col = "complaint_id",
     terminal_activities = "Formal letter sent", return_data = TRUE
   ))
   b <- res$boxes
@@ -50,7 +50,7 @@ test_that("stage_order pins an explicit vertical ordering", {
                  "Assigned", "Triage", "Acknowledgement")
   res <- suppressMessages(plot_stage_ladder(
     complaint_example, case_id = "CMP-01",
-    stage_categories = "stage_change", case_col = "complaint_id",
+    state_events = "stage_change", case_col = "complaint_id",
     terminal_activities = "Formal letter sent",
     stage_order = rev_order, return_data = TRUE
   ))
@@ -64,7 +64,7 @@ test_that("stage_order missing a present stage aborts naming it", {
   expect_error(
     suppressMessages(plot_stage_ladder(
       complaint_example, case_id = "CMP-01",
-      stage_categories = "stage_change", case_col = "complaint_id",
+      state_events = "stage_change", case_col = "complaint_id",
       terminal_activities = "Formal letter sent",
       stage_order = c("Acknowledgement", "Triage")   # omits later stages
     )),
@@ -123,7 +123,7 @@ test_that("stage_targets naming an unknown stage aborts", {
 test_that("the terminal stage renders as a point, not a segment", {
   res <- suppressMessages(plot_stage_ladder(
     complaint_example, case_id = "CMP-01",
-    stage_categories = "stage_change", case_col = "complaint_id",
+    state_events = "stage_change", case_col = "complaint_id",
     terminal_activities = "Formal letter sent", return_data = TRUE
   ))
   gc  <- geom_classes(res$plot)
@@ -136,10 +136,10 @@ test_that("the terminal stage renders as a point, not a segment", {
 # ── complaint_example end-to-end in BOTH layouts ────────────────────────────────
 
 test_that("complaint_example renders in the band layout", {
-  p <- suppressMessages(plot_patient_journey(
+  p <- suppressMessages(plot_case_timeline(
     complaint_example, case_id = "CMP-02",
-    location_categories = "stage_change", case_col = "complaint_id",
-    patient_col = NULL, terminal_activities = "Formal letter sent",
+    state_events = "stage_change", case_col = "complaint_id",
+    terminal_activities = "Formal letter sent",
     state_label = "Stage", show_duration = TRUE
   ))
   expect_s3_class(p, "ggplot")
@@ -153,26 +153,26 @@ test_that("complaint_example renders in the staircase layout", {
 })
 
 test_that("state_label sets the fill legend title in the band layout", {
-  p  <- suppressMessages(plot_patient_journey(
+  p  <- suppressMessages(plot_case_timeline(
     complaint_example, case_id = "CMP-02",
-    location_categories = "stage_change", case_col = "complaint_id",
-    patient_col = NULL, state_label = "Stage"
+    state_events = "stage_change", case_col = "complaint_id",
+    state_label = "Stage"
   ))
   # The fill scale's name drives the legend title.
   fill_scale <- p$scales$get_scales("fill")
   expect_equal(fill_scale$name, "Stage")
 })
 
-# ── Still-open complaint triggers the ongoing-spell indication (band) ───────────
+# ── Still-open complaint triggers the ongoing-case indication (band) ────────────
 
-test_that("the still-open complaint (CMP-04) marks the spell as open", {
-  res <- suppressMessages(plot_patient_journey(
+test_that("the still-open complaint (CMP-04) marks the case as open", {
+  res <- suppressMessages(plot_case_timeline(
     complaint_example, case_id = "CMP-04",
-    location_categories = "stage_change", case_col = "complaint_id",
-    patient_col = NULL, terminal_activities = "Formal letter sent",
+    state_events = "stage_change", case_col = "complaint_id",
+    terminal_activities = "Formal letter sent",
     return_data = TRUE
   ))
-  expect_true(attr(res$boxes, "spell_open"))
+  expect_true(attr(res$boxes, "case_open"))
 })
 
 # ── Visual regression baseline (vdiffr) ─────────────────────────────────────────
@@ -191,7 +191,7 @@ test_that("stage_targets bands and marks every visit to a revisited stage", {
   # visit and the firebrick excess layer must mark both.
   res <- suppressMessages(plot_stage_ladder(
     support_ticket_example, case_id = "TCK-01",
-    stage_categories = "status_change", case_col = "ticket_id",
+    state_events = "status_change", case_col = "ticket_id",
     terminal_activities = "Closed",
     stage_targets = c("In Progress" = 2), return_data = TRUE
   ))
@@ -216,7 +216,7 @@ test_that("an open stage draws its proven breach excess, capped at the last obse
   # is imputed — and the excess must stop at the last observed instant.
   res <- suppressMessages(plot_stage_ladder(
     support_ticket_example, case_id = "TCK-04",
-    stage_categories = "status_change", case_col = "ticket_id",
+    state_events = "status_change", case_col = "ticket_id",
     terminal_activities = "Closed",
     stage_targets = c("In Progress" = 1), return_data = TRUE
   ))
@@ -237,7 +237,7 @@ test_that("an open stage whose observed dwell is within target claims no breach"
   # even though the imputed end might stretch further.
   p <- suppressMessages(plot_stage_ladder(
     support_ticket_example, case_id = "TCK-04",
-    stage_categories = "status_change", case_col = "ticket_id",
+    state_events = "status_change", case_col = "ticket_id",
     terminal_activities = "Closed",
     stage_targets = c("In Progress" = 3)
   ))

@@ -5,8 +5,8 @@
 \alias{example_journey}
 \title{A synthetic patient journey event log}
 \format{
-A tibble with columns `caseID`, `K_Number`, `timestamp`,
-  `act_type`, `activity`.
+A tibble with columns `case_id`, `timestamp`, `act_type`,
+  `activity`.
 }
 \usage{
 example_journey
@@ -18,7 +18,6 @@ Discharged. Mixed in are clinical point events (`obs`, assessments,
 tests, doctor reviews) to exercise the instantaneous-event rendering.
 }
 \examples{
-plot_patient_journey(example_journey, case_id = "SP-001")
-
+plot_case_timeline(example_journey, state_events = c("location_move", "ed_location_move"))
 }
 \keyword{datasets}

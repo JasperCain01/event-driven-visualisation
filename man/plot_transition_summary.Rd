@@ -6,13 +6,13 @@
 \usage{
 plot_transition_summary(
   data,
+  state_events,
   case_ids = NULL,
-  location_categories = c("location_move", "ed_location_move"),
   time_col = "timestamp",
   act_type_col = "act_type",
   activity_col = "activity",
-  case_col = "caseID",
-  patient_col = NULL,
+  case_col = "case_id",
+  schema = NULL,
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
@@ -26,14 +26,19 @@ plot_transition_summary(
 \item{data}{A data frame or tibble containing the event log for the whole
 cohort.}
 
+\item{state_events}{Character vector of `act_type` values that open a
+state. Required — no default; see [plot_case_timeline()] for the
+discovery-error behaviour when omitted.}
+
 \item{case_ids}{Character vector of cases to include, or `NULL` (default)
 for every case in `data`.}
 
-\item{location_categories}{Character vector of `act_type` values that mark
-a location/state move.}
+\item{time_col, act_type_col, activity_col, case_col}{Column-name
+mappings, as in [plot_case_timeline()]. `case_col` is required (it
+cannot be `NULL` — a cohort needs a case column).}
 
-\item{time_col, act_type_col, activity_col, case_col, patient_col}{Column-name
-mappings, as in [plot_patient_journey()].}
+\item{schema}{An [event_log_schema()] object, the literal string
+`"auto"`, or `NULL` — see [plot_case_timeline()].}
 
 \item{tz}{Timezone used when parsing character timestamps.}
 
@@ -55,7 +60,7 @@ before summarising, or `NULL`.}
 A `ggplot` object, or a list when `return_data = TRUE`.
 }
 \description{
-A hand-rolled flow diagram: nodes are the distinct locations laid out
+A hand-rolled flow diagram: nodes are the distinct states laid out
 left-to-right by their average step index across cases, so the common
 forward flow reads as a left-to-right spine; directed edges are drawn as
 arrowed curves whose width encodes transition frequency, labelled with
@@ -66,7 +71,7 @@ visually separable from the forward flow it mirrors.
 \examples{
 plot_transition_summary(
   complaint_example, case_col = "complaint_id",
-  location_categories = "stage_change", patient_col = NULL
+  state_events = "stage_change"
 )
 
 }

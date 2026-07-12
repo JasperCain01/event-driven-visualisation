@@ -1,6 +1,6 @@
 # theme.R — Shared base theme (Stage 8)
 #
-# theme_journey() factors out the ggplot2::theme_minimal() call plus the grid-
+# theme_timeline() factors out the ggplot2::theme_minimal() call plus the grid-
 # line and title styling common to every renderer in this package: the band
 # layout (render_journey_plot()) and the staircase (plot_stage_ladder()).
 # Each caller layers its own additional theme() customisations on top (legend
@@ -24,10 +24,10 @@
 #' @return A ggplot2 `theme` object.
 #'
 #' @examples
-#' th <- theme_journey(base_size = 11)
+#' th <- theme_timeline(base_size = 11)
 #'
 #' @export
-theme_journey <- function(base_size = 11) {
+theme_timeline <- function(base_size = 11) {
   ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(
       panel.grid.major.y = ggplot2::element_blank(),

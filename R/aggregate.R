@@ -1,18 +1,19 @@
 # aggregate.R — Cohort aggregate / statistical views (Stage 6)
 #
-# Where plot_journey_cohort() (Stage 5) shows many spells as small multiples,
-# this file reduces a cohort to *numbers*: per-stay durations, per-stage summary
+# Where plot_cohort_timeline() (Stage 5) shows many cases as small multiples,
+# this file reduces a cohort to *numbers*: per-stay durations, per-state summary
 # statistics, breach rates against a target, and a transition (flow) summary.
 #
 # It never re-implements box derivation: every case is run through the same
-# validate_event_log() + derive_location_boxes() pipeline the plotting functions
+# validate_event_log() + derive_state_boxes() pipeline the plotting functions
 # use (via the internal .collect_journey() helper), so the statistics describe
 # exactly what the plots draw.
 #
 # GLOBAL RULE — every duration statistic in this file respects `end_inferred`.
-# The final box of a non-terminal spell has an *imputed* end time (the data feed
-# stopped; we invented an xmax for rendering). Including that in a mean LOS would
-# silently contaminate it with a rendering convenience. Every summariser takes
+# The final box of a non-terminal case has an *imputed* end time (the data feed
+# stopped; we invented an xmax for rendering). Including that in a mean duration
+# would silently contaminate it with a rendering convenience. Every summariser
+# takes
 #   include_inferred = FALSE   (default)  -> imputed final-stay durations are
 #                                            excluded from stats; the number
 #                                            excluded is reported.
@@ -20,24 +21,24 @@
 #                                            column travels with the output so a
 #                                            caller can see what they ingested.
 # Transition dwell is intrinsically immune (a "from" state always has a
-# successor move, so it is never the imputed final box) but threads the argument
-# for a uniform API.
+# successor state event, so it is never the imputed final box) but threads the
+# argument for a uniform API.
 
 
 # ── .collect_journey ────────────────────────────────────────────────────────────
 #
 # Run the shared validate + derive pipeline once per case and return two tidy
 # tables the summarisers build on:
-#   stays      — one row per location box across the whole cohort, carrying
-#                case_id, location, xmin, xmax, duration_secs, end_inferred,
+#   stays      — one row per state box across the whole cohort, carrying
+#                case_id, state, xmin, xmax, duration_secs, end_inferred,
 #                terminal.
-#   case_spans — one row per case: spell_start (first location move) and
-#                spell_end (last event of any kind in the spell). These are real
-#                recorded timestamps, so whole-spell elapsed time never depends
-#                on the imputed final-box end.
+#   case_spans — one row per case: case_start (first state event) and
+#                case_end (last event of any kind for that case). These are
+#                real recorded timestamps, so whole-case elapsed time never
+#                depends on the imputed final-box end.
 #
 # case_ids = NULL -> every case in `data`, first-appearance order.
-.collect_journey <- function(data, cols, location_categories, case_ids,
+.collect_journey <- function(data, cols, state_events, case_ids,
                              exclude_categories  = NULL,
                              tz                  = "UTC",
                              terminal_activities = NULL,
@@ -70,21 +71,21 @@
   for (i in seq_along(case_ids)) {
     cid <- case_ids[[i]]
 
-    spell <- validate_event_log(data, cols, cid, location_categories, tz = tz)
+    case_data <- validate_event_log(data, cols, cid, state_events, tz = tz)
 
     if (!is.null(exclude_categories)) {
-      spell <- dplyr::filter(spell, !(.data[[cols$act_type]] %in% exclude_categories))
-      if (!any(spell[[cols$act_type]] %in% location_categories)) {
+      case_data <- dplyr::filter(case_data, !(.data[[cols$act_type]] %in% exclude_categories))
+      if (!any(case_data[[cols$act_type]] %in% state_events)) {
         cli::cli_abort(c(
-          "No location events remain for case {.val {cid}} after {.arg exclude_categories}.",
-          "i" = "Remove {.val {intersect(exclude_categories, location_categories)}}
+          "No state events remain for case {.val {cid}} after {.arg exclude_categories}.",
+          "i" = "Remove {.val {intersect(exclude_categories, state_events)}}
                  from {.arg exclude_categories}."
         ))
       }
     }
 
-    boxes <- derive_location_boxes(
-      spell, cols, location_categories,
+    boxes <- derive_state_boxes(
+      case_data, cols, state_events,
       tail_strategy       = tail_strategy,
       terminal_activities = terminal_activities
     )
@@ -92,9 +93,9 @@
     stays_list[[i]] <- .stays_from_boxes(boxes, cid)
 
     spans_list[[i]] <- dplyr::tibble(
-      case_id     = cid,
-      spell_start = min(boxes$xmin),
-      spell_end   = max(spell[[cols$time]])
+      case_id    = cid,
+      case_start = min(boxes$xmin),
+      case_end   = max(case_data[[cols$time]])
     )
   }
 
@@ -107,7 +108,7 @@
 
 # ── Small NA-safe stat helpers ──────────────────────────────────────────────────
 #
-# A location whose only stays are excluded (all imputed) leaves an empty vector;
+# A state whose only stays are excluded (all imputed) leaves an empty vector;
 # mean()/quantile() of that should be NA, not NaN or an error.
 .safe_mean <- function(x) if (length(x) == 0) NA_real_ else mean(x)
 .safe_quantile <- function(x, p) {
@@ -118,25 +119,29 @@
 
 # ── 6a. Per-stay durations ──────────────────────────────────────────────────────
 #
-# One row per location stay across the cohort. This is the detail table every
+# One row per state stay across the cohort. This is the detail table every
 # other 6a/6c function is built on.
 #
 #' Summarise per-stay durations across a cohort
 #'
-#' One row per location stay across the cohort — the detail table the other
+#' One row per state stay across the cohort — the detail table the other
 #' aggregate functions build on. Every duration statistic in this package
-#' respects `end_inferred`: the final box of a non-terminal spell has an
-#' *imputed* end time, and including it in a mean length-of-stay would
-#' silently contaminate it with a rendering convenience.
+#' respects `end_inferred`: the final box of a non-terminal case has an
+#' *imputed* end time, and including it in a mean duration would silently
+#' contaminate it with a rendering convenience.
 #'
 #' @param data A data frame or tibble containing the event log for the whole
 #'   cohort.
+#' @param state_events Character vector of `act_type` values that open a
+#'   state. Required — no default; see [plot_case_timeline()] for the
+#'   discovery-error behaviour when omitted.
 #' @param case_ids Character vector of cases to include, or `NULL` (default)
 #'   for every case in `data`.
-#' @param location_categories Character vector of `act_type` values that mark
-#'   a location/state move.
-#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
-#'   mappings, as in [plot_patient_journey()].
+#' @param time_col,act_type_col,activity_col,case_col Column-name
+#'   mappings, as in [plot_case_timeline()]. `case_col` is required (it
+#'   cannot be `NULL` — a cohort needs a case column).
+#' @param schema An [event_log_schema()] object, the literal string
+#'   `"auto"`, or `NULL` — see [plot_case_timeline()].
 #' @param tz Timezone used when parsing character timestamps.
 #' @param terminal_activities Character vector of terminal `activity` values.
 #' @param exclude_categories Character vector of `act_type` values to drop
@@ -147,26 +152,26 @@
 #'   `attr(result, "n_inferred_excluded")`; `TRUE` keeps every row (the
 #'   `end_inferred` column still flags the imputed ones).
 #'
-#' @return A tibble with one row per stay (`case_id`, `location`, `xmin`,
+#' @return A tibble with one row per stay (`case_id`, `state`, `xmin`,
 #'   `xmax`, `duration_secs`, `end_inferred`, `terminal`), carrying
 #'   `attr(., "n_inferred_excluded")`.
 #'
 #' @examples
-#' summarise_journey_durations(
+#' summarise_case_durations(
 #'   complaint_example, case_col = "complaint_id",
-#'   location_categories = "stage_change", patient_col = NULL
+#'   state_events = "stage_change"
 #' )
 #'
 #' @export
-summarise_journey_durations <- function(
+summarise_case_durations <- function(
     data,
+    state_events,
     case_ids = NULL,
-    location_categories = c("location_move", "ed_location_move"),
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+    schema = NULL,
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
@@ -174,13 +179,33 @@ summarise_journey_durations <- function(
     include_inferred    = FALSE
 ) {
 
+  if (is.null(case_col)) {
+    cli::cli_abort(c(
+      "{.arg case_col} cannot be {.code NULL}: a cohort needs a case column."
+    ))
+  }
+
+  resolved <- resolve_entry_args(
+    data, schema,
+    state_events, missing(state_events),
+    time_col,     missing(time_col),
+    case_col,     missing(case_col),
+    act_type_col, missing(act_type_col),
+    activity_col, missing(activity_col)
+  )
+  state_events <- resolved$state_events
+  time_col     <- resolved$time_col
+  case_col     <- resolved$case_col
+  act_type_col <- resolved$act_type_col
+  activity_col <- resolved$activity_col
+
   cols <- list(
     time = time_col, act_type = act_type_col, activity = activity_col,
-    case = case_col, patient = patient_col, lane = NULL
+    case = case_col, lane = NULL
   )
 
   collected <- .collect_journey(
-    data, cols, location_categories, case_ids,
+    data, cols, state_events, case_ids,
     exclude_categories  = exclude_categories,
     tz                  = tz,
     terminal_activities = terminal_activities,
@@ -200,45 +225,43 @@ summarise_journey_durations <- function(
 }
 
 
-# ── 6a. Per-stage (per-location) duration statistics ────────────────────────────
+# ── 6a. Per-state duration statistics ───────────────────────────────────────────
 #
-# Built on summarise_journey_durations(): one row per distinct location with the
+# Built on summarise_case_durations(): one row per distinct state with the
 # case count, mean/median/p25/p75 dwell in seconds, and the number of imputed
 # final stays excluded from those statistics.
 #
-# n_cases counts every case that visited the location (whether or not its stay
-# was inferred); the statistics are computed only over the *included* stays. A
-#' Summarise per-location duration statistics across a cohort
+#' Summarise per-state duration statistics across a cohort
 #'
-#' Built on [summarise_journey_durations()]: one row per distinct location
+#' Built on [summarise_case_durations()]: one row per distinct state
 #' with the case count, mean/median/p25/p75 dwell in seconds, and the number
 #' of imputed final stays excluded from those statistics.
 #'
-#' @inheritParams summarise_journey_durations
+#' @inheritParams summarise_case_durations
 #'
-#' @return A tibble with one row per location (`location`, `n_cases`,
+#' @return A tibble with one row per state (`state`, `n_cases`,
 #'   `mean_secs`, `median_secs`, `p25_secs`, `p75_secs`,
 #'   `n_inferred_excluded`). `n_cases` counts every case that visited the
-#'   location; the statistics are computed only over the *included* stays, so
-#'   a location seen only as an imputed final stay reports `NA` statistics
+#'   state; the statistics are computed only over the *included* stays, so
+#'   a state seen only as an imputed final stay reports `NA` statistics
 #'   when `include_inferred = FALSE`.
 #'
 #' @examples
-#' summarise_stage_durations(
+#' summarise_state_durations(
 #'   complaint_example, case_col = "complaint_id",
-#'   location_categories = "stage_change", patient_col = NULL
+#'   state_events = "stage_change"
 #' )
 #'
 #' @export
-summarise_stage_durations <- function(
+summarise_state_durations <- function(
     data,
+    state_events,
     case_ids = NULL,
-    location_categories = c("location_move", "ed_location_move"),
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+    schema = NULL,
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
@@ -246,14 +269,14 @@ summarise_stage_durations <- function(
     include_inferred    = FALSE
 ) {
 
-  # Pull the full detail table (all stays, flag intact) so per-location excluded
+  # Pull the full detail table (all stays, flag intact) so per-state excluded
   # counts can be computed here rather than lost to an upstream filter.
-  stays <- summarise_journey_durations(
+  stays <- summarise_case_durations(
     data,
+    state_events        = state_events,
     case_ids            = case_ids,
-    location_categories = location_categories,
     time_col = time_col, act_type_col = act_type_col, activity_col = activity_col,
-    case_col = case_col, patient_col = patient_col,
+    case_col = case_col, schema = schema,
     tz = tz, terminal_activities = terminal_activities,
     exclude_categories = exclude_categories, tail_strategy = tail_strategy,
     include_inferred = TRUE
@@ -262,7 +285,7 @@ summarise_stage_durations <- function(
   stays$.use <- if (include_inferred) TRUE else !stays$end_inferred
 
   stays |>
-    dplyr::group_by(location) |>
+    dplyr::group_by(state) |>
     dplyr::summarise(
       n_cases             = dplyr::n_distinct(case_id),
       mean_secs           = .safe_mean(duration_secs[.use]),
@@ -278,19 +301,19 @@ summarise_stage_durations <- function(
 # ── 6b. Breach rate against a target ────────────────────────────────────────────
 #
 # What fraction of cases exceed `target_hours`? Two scopes:
-#   scope = "spell"          — whole-spell elapsed time: first location move to
+#   scope = "case"            — whole-case elapsed time: first state event to
 #                              last recorded event. Both endpoints are real
 #                              timestamps, so nothing is inferred (end_inferred
 #                              is FALSE for every row and include_inferred is a
 #                              no-op).
-#   scope = "<location name>" — dwell within one stage (e.g. the ED 4-hour
-#                              standard = time in the ED box). A case that never
-#                              visited the stage contributes no row. When that
-#                              stage is the imputed final box, its dwell is
-#                              inferred; include_inferred = FALSE drops those
-#                              cases and reports the count.
+#   scope = "<state name>"    — dwell within one state (e.g. a 4-hour
+#                              standard = time in that state). A case that
+#                              never visited the state contributes no row.
+#                              When that state is the imputed final box, its
+#                              dwell is inferred; include_inferred = FALSE
+#                              drops those cases and reports the count.
 #
-# An unknown scope name aborts with a did-you-mean hint over the locations
+# An unknown scope name aborts with a did-you-mean hint over the states
 # actually present in the cohort.
 #
 #' Summarise breach rate against a target duration
@@ -300,25 +323,29 @@ summarise_stage_durations <- function(
 #' @param data A data frame or tibble containing the event log for the whole
 #'   cohort.
 #' @param target_hours Single numeric target, in hours.
-#' @param scope Either `"spell"` (whole-spell elapsed time: first location
-#'   move to last recorded event — both endpoints are real timestamps, so
-#'   `include_inferred` is a no-op) or the name of a location present in the
-#'   cohort (dwell within that one stage, e.g. the ED 4-hour standard). A
-#'   case that never visited the stage contributes no row. An unknown scope
-#'   name aborts with a did-you-mean hint.
+#' @param scope Either `"case"` (whole-case elapsed time: first state event
+#'   to last recorded event — both endpoints are real timestamps, so
+#'   `include_inferred` is a no-op) or the name of a state present in the
+#'   cohort (dwell within that one state, e.g. a 4-hour standard). A case
+#'   that never visited the state contributes no row. An unknown scope name
+#'   aborts with a did-you-mean hint.
 #' @param case_ids Character vector of cases to include, or `NULL` (default)
 #'   for every case in `data`.
-#' @param location_categories Character vector of `act_type` values that mark
-#'   a location/state move.
-#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
-#'   mappings, as in [plot_patient_journey()].
+#' @param state_events Character vector of `act_type` values that open a
+#'   state. Required — no default; see [plot_case_timeline()] for the
+#'   discovery-error behaviour when omitted.
+#' @param time_col,act_type_col,activity_col,case_col Column-name
+#'   mappings, as in [plot_case_timeline()]. `case_col` is required (it
+#'   cannot be `NULL` — a cohort needs a case column).
+#' @param schema An [event_log_schema()] object, the literal string
+#'   `"auto"`, or `NULL` — see [plot_case_timeline()].
 #' @param tz Timezone used when parsing character timestamps.
 #' @param terminal_activities Character vector of terminal `activity` values.
 #' @param exclude_categories Character vector of `act_type` values to drop
 #'   before summarising, or `NULL`.
 #' @param tail_strategy Strategy for inferring the final box's end time.
-#' @param include_inferred Logical; see [summarise_journey_durations()]. When
-#'   `scope` is a location whose final stay is the imputed final box,
+#' @param include_inferred Logical; see [summarise_case_durations()]. When
+#'   `scope` is a state whose final stay is the imputed final box,
 #'   `FALSE` (default) drops those cases and reports the count.
 #'
 #' @return A tibble (`case_id`, `elapsed_hours`, `breached`, `end_inferred`)
@@ -327,23 +354,22 @@ summarise_stage_durations <- function(
 #'
 #' @examples
 #' summarise_breach_rate(
-#'   complaint_example, target_hours = 24 * 7, scope = "spell",
-#'   case_col = "complaint_id", location_categories = "stage_change",
-#'   patient_col = NULL
+#'   complaint_example, target_hours = 24 * 7, scope = "case",
+#'   case_col = "complaint_id", state_events = "stage_change"
 #' )
 #'
 #' @export
 summarise_breach_rate <- function(
     data,
     target_hours,
-    scope    = "spell",
+    scope    = "case",
     case_ids = NULL,
-    location_categories = c("location_move", "ed_location_move"),
+    state_events,
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+    schema = NULL,
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
@@ -358,48 +384,67 @@ summarise_breach_rate <- function(
     ))
   }
   if (!is.character(scope) || length(scope) != 1L) {
-    cli::cli_abort("{.arg scope} must be a single string: {.val spell} or a location name.")
+    cli::cli_abort("{.arg scope} must be a single string: {.val case} or a state name.")
   }
+  if (is.null(case_col)) {
+    cli::cli_abort(c(
+      "{.arg case_col} cannot be {.code NULL}: a cohort needs a case column."
+    ))
+  }
+
+  resolved <- resolve_entry_args(
+    data, schema,
+    state_events, missing(state_events),
+    time_col,     missing(time_col),
+    case_col,     missing(case_col),
+    act_type_col, missing(act_type_col),
+    activity_col, missing(activity_col)
+  )
+  state_events <- resolved$state_events
+  time_col     <- resolved$time_col
+  case_col     <- resolved$case_col
+  act_type_col <- resolved$act_type_col
+  activity_col <- resolved$activity_col
 
   cols <- list(
     time = time_col, act_type = act_type_col, activity = activity_col,
-    case = case_col, patient = patient_col, lane = NULL
+    case = case_col, lane = NULL
   )
 
   collected <- .collect_journey(
-    data, cols, location_categories, case_ids,
+    data, cols, state_events, case_ids,
     exclude_categories  = exclude_categories,
     tz                  = tz,
     terminal_activities = terminal_activities,
     tail_strategy       = tail_strategy
   )
 
-  if (identical(scope, "spell")) {
+  if (identical(scope, "case")) {
     out <- collected$case_spans |>
       dplyr::mutate(
-        elapsed_hours = as.numeric(difftime(spell_end, spell_start, units = "hours")),
+        elapsed_hours = as.numeric(difftime(case_end, case_start, units = "hours")),
         end_inferred  = FALSE
       ) |>
       dplyr::select(case_id, elapsed_hours, end_inferred)
     n_excluded <- 0L
   } else {
-    present <- unique(collected$stays$location)
+    present <- unique(collected$stays$state)
     if (!scope %in% present) {
       suggestions <- suggest_matches(scope, present)
       hint <- if (length(suggestions) > 0) {
         cli::format_inline("Did you mean {.val {suggestions}}?")
       } else {
-        cli::format_inline("Locations present in the cohort: {.val {present}}")
+        cli::format_inline("States present in the cohort: {.val {present}}")
       }
       cli::cli_abort(c(
-        "{.arg scope} {.val {scope}} is neither {.val spell} nor a location present in the cohort.",
+        "{.arg scope} {.val {scope}} is neither {.val case} nor a state present in the cohort.",
         "i" = hint
       ))
     }
 
-    stage <- dplyr::filter(collected$stays, location == scope)
+    stage <- dplyr::filter(collected$stays, state == scope)
 
-    # One dwell per case for this stage. If a case visits the stage more than
+    # One dwell per case for this state. If a case visits the state more than
     # once, sum the dwells (total time spent in that state); an imputed final
     # visit taints the case, so carry end_inferred = any(end_inferred).
     stage <- stage |>
@@ -426,14 +471,14 @@ summarise_breach_rate <- function(
 
 # ── 6c. Transition summary ──────────────────────────────────────────────────────
 #
-# Reduce the cohort to directed location-to-location transitions. For each case,
+# Reduce the cohort to directed state-to-state transitions. For each case,
 # consecutive stays (ordered by entry time) form a from -> to pair; the dwell of
 # that transition is the time spent in the "from" state before the move. A "from"
 # state always has a successor, so it is never the imputed final box — transition
 # dwell is intrinsically real (include_inferred is threaded only for API
 # symmetry and never excludes anything here).
 #
-#' Summarise directed location-to-location transitions across a cohort
+#' Summarise directed state-to-state transitions across a cohort
 #'
 #' For each case, consecutive stays (ordered by entry time) form a
 #' from -> to pair; the dwell of that transition is the time spent in the
@@ -442,28 +487,28 @@ summarise_breach_rate <- function(
 #' real (`include_inferred` is threaded only for API symmetry and never
 #' excludes anything here).
 #'
-#' @inheritParams summarise_journey_durations
+#' @inheritParams summarise_case_durations
 #'
-#' @return A tibble (`from_location`, `to_location`, `n`, `mean_dwell_secs`,
+#' @return A tibble (`from_state`, `to_state`, `n`, `mean_dwell_secs`,
 #'   `median_dwell_secs`), one row per distinct ordered pair, sorted by
 #'   descending `n`.
 #'
 #' @examples
 #' summarise_transitions(
 #'   complaint_example, case_col = "complaint_id",
-#'   location_categories = "stage_change", patient_col = NULL
+#'   state_events = "stage_change"
 #' )
 #'
 #' @export
 summarise_transitions <- function(
     data,
+    state_events,
     case_ids = NULL,
-    location_categories = c("location_move", "ed_location_move"),
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+    schema = NULL,
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
@@ -471,13 +516,33 @@ summarise_transitions <- function(
     include_inferred    = FALSE
 ) {
 
+  if (is.null(case_col)) {
+    cli::cli_abort(c(
+      "{.arg case_col} cannot be {.code NULL}: a cohort needs a case column."
+    ))
+  }
+
+  resolved <- resolve_entry_args(
+    data, schema,
+    state_events, missing(state_events),
+    time_col,     missing(time_col),
+    case_col,     missing(case_col),
+    act_type_col, missing(act_type_col),
+    activity_col, missing(activity_col)
+  )
+  state_events <- resolved$state_events
+  time_col     <- resolved$time_col
+  case_col     <- resolved$case_col
+  act_type_col <- resolved$act_type_col
+  activity_col <- resolved$activity_col
+
   cols <- list(
     time = time_col, act_type = act_type_col, activity = activity_col,
-    case = case_col, patient = patient_col, lane = NULL
+    case = case_col, lane = NULL
   )
 
   stays <- .collect_journey(
-    data, cols, location_categories, case_ids,
+    data, cols, state_events, case_ids,
     exclude_categories  = exclude_categories,
     tz                  = tz,
     terminal_activities = terminal_activities,
@@ -488,17 +553,17 @@ summarise_transitions <- function(
     dplyr::arrange(case_id, xmin) |>
     dplyr::group_by(case_id) |>
     dplyr::mutate(
-      to_location = dplyr::lead(location),
-      dwell_secs  = duration_secs
+      to_state   = dplyr::lead(state),
+      dwell_secs = duration_secs
     ) |>
     dplyr::ungroup() |>
-    dplyr::filter(!is.na(to_location)) |>
-    dplyr::rename(from_location = location)
+    dplyr::filter(!is.na(to_state)) |>
+    dplyr::rename(from_state = state)
 
   if (nrow(pairs) == 0) {
     return(dplyr::tibble(
-      from_location     = character(),
-      to_location       = character(),
+      from_state        = character(),
+      to_state          = character(),
       n                 = integer(),
       mean_dwell_secs   = numeric(),
       median_dwell_secs = numeric()
@@ -506,28 +571,28 @@ summarise_transitions <- function(
   }
 
   pairs |>
-    dplyr::group_by(from_location, to_location) |>
+    dplyr::group_by(from_state, to_state) |>
     dplyr::summarise(
       n                 = dplyr::n(),
       mean_dwell_secs   = mean(dwell_secs),
       median_dwell_secs = stats::median(dwell_secs),
       .groups           = "drop"
     ) |>
-    dplyr::arrange(dplyr::desc(n), from_location, to_location)
+    dplyr::arrange(dplyr::desc(n), from_state, to_state)
 }
 
 
 # ── 6c. Transition flow diagram ─────────────────────────────────────────────────
 #
 # A hand-rolled flow diagram (no new heavy dependency — locked decision 4). Nodes
-# are the distinct locations laid out left-to-right by their average step index
+# are the distinct states laid out left-to-right by their average step index
 # across cases (so the common forward flow reads as a left-to-right spine);
 # directed edges are drawn as arrowed curves whose width encodes transition
 # frequency, labelled with the mean dwell in the "from" state.
 #
 #' Plot a directed transition-flow diagram for a cohort
 #'
-#' A hand-rolled flow diagram: nodes are the distinct locations laid out
+#' A hand-rolled flow diagram: nodes are the distinct states laid out
 #' left-to-right by their average step index across cases, so the common
 #' forward flow reads as a left-to-right spine; directed edges are drawn as
 #' arrowed curves whose width encodes transition frequency, labelled with
@@ -535,7 +600,7 @@ summarise_transitions <- function(
 #' bow one way, backward transitions the other, so a re-entry loop is
 #' visually separable from the forward flow it mirrors.
 #'
-#' @inheritParams summarise_journey_durations
+#' @inheritParams summarise_case_durations
 #' @param min_n Only draw transitions observed at least this many times.
 #' @param title Plot title; `NULL` auto-generates one from the case count.
 #' @param return_data Logical; if `TRUE`, return
@@ -546,19 +611,19 @@ summarise_transitions <- function(
 #' @examples
 #' plot_transition_summary(
 #'   complaint_example, case_col = "complaint_id",
-#'   location_categories = "stage_change", patient_col = NULL
+#'   state_events = "stage_change"
 #' )
 #'
 #' @export
 plot_transition_summary <- function(
     data,
+    state_events,
     case_ids = NULL,
-    location_categories = c("location_move", "ed_location_move"),
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+    schema = NULL,
     tz = "UTC",
     terminal_activities = NULL,
     exclude_categories  = NULL,
@@ -568,13 +633,33 @@ plot_transition_summary <- function(
     return_data = FALSE
 ) {
 
+  if (is.null(case_col)) {
+    cli::cli_abort(c(
+      "{.arg case_col} cannot be {.code NULL}: a cohort needs a case column."
+    ))
+  }
+
+  resolved <- resolve_entry_args(
+    data, schema,
+    state_events, missing(state_events),
+    time_col,     missing(time_col),
+    case_col,     missing(case_col),
+    act_type_col, missing(act_type_col),
+    activity_col, missing(activity_col)
+  )
+  state_events <- resolved$state_events
+  time_col     <- resolved$time_col
+  case_col     <- resolved$case_col
+  act_type_col <- resolved$act_type_col
+  activity_col <- resolved$activity_col
+
   cols <- list(
     time = time_col, act_type = act_type_col, activity = activity_col,
-    case = case_col, patient = patient_col, lane = NULL
+    case = case_col, lane = NULL
   )
 
   stays <- .collect_journey(
-    data, cols, location_categories, case_ids,
+    data, cols, state_events, case_ids,
     exclude_categories  = exclude_categories,
     tz                  = tz,
     terminal_activities = terminal_activities,
@@ -583,10 +668,10 @@ plot_transition_summary <- function(
 
   transitions <- summarise_transitions(
     data,
+    state_events        = state_events,
     case_ids            = case_ids,
-    location_categories = location_categories,
     time_col = time_col, act_type_col = act_type_col, activity_col = activity_col,
-    case_col = case_col, patient_col = patient_col,
+    case_col = case_col,
     tz = tz, terminal_activities = terminal_activities,
     exclude_categories = exclude_categories, tail_strategy = tail_strategy
   )
@@ -595,12 +680,12 @@ plot_transition_summary <- function(
   if (nrow(transitions) == 0) {
     cli::cli_abort(c(
       "No transitions to plot.",
-      "i" = "The cohort has no location-to-location moves at or above
+      "i" = "The cohort has no state-to-state moves at or above
              {.arg min_n} = {min_n}."
     ))
   }
 
-  # ── Node layout: order locations by mean step index across cases ────────────
+  # ── Node layout: order states by mean step index across cases ───────────────
   step_idx <- stays |>
     dplyr::arrange(case_id, xmin) |>
     dplyr::group_by(case_id) |>
@@ -608,17 +693,17 @@ plot_transition_summary <- function(
     dplyr::ungroup()
 
   nodes <- step_idx |>
-    dplyr::group_by(location) |>
+    dplyr::group_by(state) |>
     dplyr::summarise(mean_step = mean(step), visits = dplyr::n(), .groups = "drop") |>
-    dplyr::arrange(mean_step, location) |>
+    dplyr::arrange(mean_step, state) |>
     dplyr::mutate(x = dplyr::row_number(), y = 0)
 
-  node_x <- stats::setNames(nodes$x, nodes$location)
+  node_x <- stats::setNames(nodes$x, nodes$state)
 
   edges <- transitions |>
     dplyr::mutate(
-      x    = node_x[from_location],
-      xend = node_x[to_location],
+      x    = node_x[from_state],
+      xend = node_x[to_state],
       # Forward edges (x < xend) curve upward; backward/self edges curve the
       # other way so re-entries don't overplot the forward spine.
       forward   = xend >= x,
@@ -672,7 +757,7 @@ plot_transition_summary <- function(
     ) +
     ggplot2::geom_label(
       data = nodes,
-      ggplot2::aes(x = x, y = y, label = location),
+      ggplot2::aes(x = x, y = y, label = state),
       size = 3, fill = "grey95", colour = "grey10",
       label.padding = ggplot2::unit(0.3, "lines"), fontface = "bold"
     ) +
@@ -707,86 +792,97 @@ scales_int_breaks <- function(x) {
 }
 
 
-# ── 6e. Timeline + per-stage duration summary, stacked (stretch) ────────────────
+# ── 6e. Timeline + per-state duration summary, stacked (stretch) ────────────────
 #
-#' Plot a single case's timeline stacked above its per-stage duration summary
+#' Plot a single case's timeline stacked above its per-state duration summary
 #'
-#' `patchwork`-stacks a single case's timeline ([plot_patient_journey()])
-#' above a bar chart of that case's per-stage dwell. Requires the
+#' `patchwork`-stacks a single case's timeline ([plot_case_timeline()])
+#' above a bar chart of that case's per-state dwell. Requires the
 #' `patchwork` package (Suggests only).
 #'
 #' @param data A data frame or tibble containing the event log.
-#' @param case_id The single case identifier to visualise.
-#' @param location_categories Character vector of `act_type` values that mark
-#'   a location/state move.
+#' @param case_id The single case identifier to visualise, or `NULL` — see
+#'   [plot_case_timeline()] for the resolution rules.
+#' @param state_events Character vector of `act_type` values that open a
+#'   state. Required — no default; see [plot_case_timeline()] for the
+#'   discovery-error behaviour when omitted.
 #' @param heights Relative heights `c(timeline, bars)` passed to
 #'   `patchwork::wrap_plots()`.
-#' @param ... Additional arguments forwarded to [plot_patient_journey()].
+#' @param ... Additional arguments forwarded to [plot_case_timeline()].
 #'
 #' @return A `patchwork` object.
 #'
 #' @examples
 #' \donttest{
 #' if (requireNamespace("patchwork", quietly = TRUE)) {
-#'   plot_journey_with_summary(example_journey, case_id = "SP-001")
+#'   plot_case_timeline_with_summary(
+#'     example_journey,
+#'     state_events = c("location_move", "ed_location_move")
+#'   )
 #' }
 #' }
 #'
 #' @export
-plot_journey_with_summary <- function(
-    data, case_id,
-    location_categories = c("location_move", "ed_location_move"),
+plot_case_timeline_with_summary <- function(
+    data,
+    case_id = NULL,
+    state_events,
     heights = c(2, 1),
     ...
 ) {
 
   if (!requireNamespace("patchwork", quietly = TRUE)) {
     cli::cli_abort(c(
-      "{.pkg patchwork} is required for {.fn plot_journey_with_summary}.",
+      "{.pkg patchwork} is required for {.fn plot_case_timeline_with_summary}.",
       "i" = "Install it with {.code install.packages(\"patchwork\")}."
     ))
   }
 
   # The timeline. return_data gives us the per-stay summary for free (Stage 6d).
-  res <- plot_patient_journey(
+  # state_events is forwarded, not evaluated here, so an omitted argument
+  # still triggers plot_case_timeline()'s own discovery-error message rather
+  # than a generic "argument is missing" error — R's missing() propagates
+  # through this kind of pass-through forwarding.
+  res <- plot_case_timeline(
     data, case_id = case_id,
-    location_categories = location_categories,
+    state_events = state_events,
     return_data = TRUE, ...
   )
 
   timeline <- res$plot
   summary  <- res$summary
 
-  # Per-stage dwell bars, in visit order. Imputed final stays carry the
+  # Per-state dwell bars, in visit order. Imputed final stays carry the
   # package's usual "+" suffix on their label rather than a separate legend.
   summary <- summary |>
     dplyr::mutate(
-      location = factor(location, levels = unique(location)),
-      hours    = duration_secs / 3600,
-      dur_lab  = ifelse(end_inferred,
-                        paste0(format_duration(duration_secs), "+"),
-                        format_duration(duration_secs))
+      state   = factor(state, levels = unique(state)),
+      hours   = duration_secs / 3600,
+      dur_lab = ifelse(end_inferred,
+                       paste0(format_duration(duration_secs), "+"),
+                       format_duration(duration_secs))
     )
 
   # Bar colours must reuse the exact palette the timeline's fill scale used.
   # The timeline's fill levels are the non-terminal boxes (including any
-  # synthetic "(pre-admission)" box) in first-appearance order; the summary
-  # drops the pre-admission artefact and keeps terminal stays, so building a
-  # fresh palette over the summary's own levels shifted every hue by one
-  # whenever the two level sets differed. Stays absent from the timeline's
-  # fill scale (terminals) take the palette positions AFTER the shared levels,
-  # leaving the shared assignments untouched. A location_palette or
-  # palette_style forwarded to the timeline through `...` is honoured here too.
+  # synthetic "(before first state)" box) in first-appearance order; the
+  # summary drops the before-first-state artefact and keeps terminal stays,
+  # so building a fresh palette over the summary's own levels shifted every
+  # hue by one whenever the two level sets differed. Stays absent from the
+  # timeline's fill scale (terminals) take the palette positions AFTER the
+  # shared levels, leaving the shared assignments untouched. A
+  # state_palette or palette_style forwarded to the timeline through `...`
+  # is honoured here too.
   dots            <- list(...)
-  timeline_levels <- unique(res$boxes$location[!res$boxes$terminal])
+  timeline_levels <- unique(res$boxes$state[!res$boxes$terminal])
   all_levels      <- c(timeline_levels,
-                       setdiff(levels(summary$location), timeline_levels))
-  bar_cols <- dots$location_palette %||%
-    journey_palette(all_levels, "location", dots$palette_style %||% "okabe")
+                       setdiff(levels(summary$state), timeline_levels))
+  bar_cols <- dots$state_palette %||%
+    journey_palette(all_levels, "state", dots$palette_style %||% "okabe")
 
   bars <- ggplot2::ggplot(
     summary,
-    ggplot2::aes(x = location, y = hours, fill = location)
+    ggplot2::aes(x = state, y = hours, fill = state)
   ) +
     ggplot2::geom_col(width = 0.7, show.legend = FALSE) +
     ggplot2::geom_text(

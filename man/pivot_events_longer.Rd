@@ -8,8 +8,7 @@ pivot_events_longer(
   data,
   case_col,
   time_cols,
-  patient_col = NULL,
-  location_cols = NULL,
+  state_cols = NULL,
   act_type_map = NULL,
   activity_map = NULL,
   drop_na = TRUE,
@@ -26,13 +25,11 @@ pivot_events_longer(
 
 \item{time_cols}{Character vector of wide column names to pivot.}
 
-\item{patient_col}{Optional secondary identifier column, or `NULL`.}
-
-\item{location_cols}{Subset of `time_cols` that mark a physical location
-move; these get `act_type = "location_move"`.}
+\item{state_cols}{Subset of `time_cols` that mark a state change; these
+get `act_type = "state_change"`.}
 
 \item{act_type_map}{Named character vector: `time_cols` entry -> act_type,
-for non-location milestones. `NULL` = the milestone name is used as-is.}
+for non-state milestones. `NULL` = the milestone name is used as-is.}
 
 \item{activity_map}{Named character vector: `time_cols` entry -> display
 label. `NULL` = derived from the milestone name (see
@@ -45,19 +42,22 @@ milestone didn't happen for that case). Default `TRUE`.}
 \item{tz}{Timezone forwarded to the internal datetime coercion.}
 
 \item{time_col_out, act_type_col_out, activity_col_out}{Output column
-names, matching [plot_patient_journey()]'s `time_col`/`act_type_col`/
+names, matching [plot_case_timeline()]'s `time_col`/`act_type_col`/
 `activity_col` arguments.}
 }
 \value{
-A long tibble: case, patient (if given), time, act_type, activity,
-  then any passthrough columns from `data` untouched — ready to pass
-  straight into [plot_patient_journey()].
+A long tibble: case, time, act_type, activity, then any
+  passthrough columns from `data` untouched — ready to pass straight into
+  [plot_case_timeline()].
 }
 \description{
 Milestone-style event logs are commonly stored wide: one row per case, one
 column per timestamp (`"arrival_time"`, `"triage_time"`,
-`"discharge_time"`, ...). [plot_patient_journey()] needs the long form
-(one row per event); this reshapes the former into the latter.
+`"discharge_time"`, ...). [plot_case_timeline()] needs the long form
+(one row per event); this reshapes the former into the latter. The pivot
+and the plot agree out of the box: state columns emit
+`act_type = "state_change"`, which is exactly what you pass as
+`state_events` to [plot_case_timeline()].
 }
 \examples{
 wide <- data.frame(
@@ -67,6 +67,6 @@ wide <- data.frame(
 )
 pivot_events_longer(wide, case_col = "case_id",
                      time_cols = c("arrival_time", "discharge_time"),
-                     location_cols = c("arrival_time", "discharge_time"))
+                     state_cols = c("arrival_time", "discharge_time"))
 
 }

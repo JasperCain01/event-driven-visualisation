@@ -7,8 +7,8 @@
 \title{eventviz: Event Log Visualisation}
 \description{
 A general-purpose package for visualising timestamped event logs as
-location-band timelines, staircase stage diagrams, cohort facets, and
-aggregate/statistical summaries. See [plot_patient_journey()] to get
+state-band timelines, staircase stage diagrams, cohort facets, and
+aggregate/statistical summaries. See [plot_case_timeline()] to get
 started.
 }
 \seealso{

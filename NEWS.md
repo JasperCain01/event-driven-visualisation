@@ -1,3 +1,74 @@
+# eventviz 0.2.0
+
+A generic-core redesign: a first-time user with any timestamped event log
+now gets a correct plot in one call, with exactly one explicit declaration
+(`state_events` — which event types open a state) and no healthcare
+vocabulary anywhere in the API surface. The package has no users yet, so
+this is a clean break: no deprecation shims, no compatibility aliases.
+
+## Renames
+
+| Old | New |
+|---|---|
+| `plot_patient_journey()` | `plot_case_timeline()` |
+| `plot_journey_cohort()` | `plot_cohort_timeline()` |
+| `summarise_journey_durations()` | `summarise_case_durations()` |
+| `summarise_stage_durations()` | `summarise_state_durations()` |
+| `plot_journey_with_summary()` | `plot_case_timeline_with_summary()` |
+| `theme_journey()` | `theme_timeline()` |
+| argument `location_categories` / `stage_categories` | `state_events` (every function; **required, no default**) |
+| argument `patient_col` | **deleted** (every function) |
+| argument `location_palette` | `state_palette` |
+| argument default `state_label = "Location"` | `state_label = "State"` |
+| argument default `case_col = "caseID"` | `case_col = "case_id"` |
+| pivot argument `location_cols` | `state_cols` |
+| pivot emitted `act_type` value `"location_move"` | `"state_change"` |
+| schema field `location_categories` | `state_events` |
+| schema field `patient_col` | **deleted** |
+| output columns `location` / `from_location` / `to_location` | `state` / `from_state` / `to_state` |
+| `summarise_breach_rate()` `scope = "spell"` | `scope = "case"` |
+
+`plot_stage_ladder()`'s `stage_order` keeps its name; `plot_transition_summary()`,
+`summarise_breach_rate()`, `summarise_transitions()`, and `event_log_schema()`/
+`autodetect_schema()` keep their names.
+
+## New case-resolution rules
+
+- `state_events` has no default anywhere. Omitting it aborts with an error
+  listing the distinct `act_type` values present in your data (with row
+  counts) so you can see what to pass — this listing *is* the discovery
+  mechanism; there is no value-level autodetection.
+- `case_id = NULL` (the new default) resolves to the column's only value
+  when there is exactly one case, informing you which one was used;
+  with more than one case it aborts, naming the first 10 and pointing at
+  `plot_cohort_timeline()`.
+- `case_col = NULL` treats the whole data frame as a single unnamed series
+  (`plot_case_timeline()` and `plot_stage_ladder()` only — a cohort or a
+  summariser still needs a case column).
+- `schema` (`event_log_schema()` / `autodetect_schema()` / `schema = "auto"`)
+  is now accepted by every cohort/aggregate function, closing a 0.1.0 gap
+  where only the main plotting function did.
+- The multi-patient-per-case warning is gone along with the `patient_col`
+  concept it existed to check.
+
+## Vocabulary
+
+The concept formerly called "location" (a box on the timeline, a rung on
+the ladder) is now uniformly the **state**: an exclusive condition a case
+occupies for an interval, opened by an event in `state_events` and closed
+by the next such event — see `plot_case_timeline()`'s `@details` for the
+exclusivity/contiguity semantics. The synthetic leading box for events
+before the first state event is now labelled `"(before first state)"`
+(was `"(pre-admission)"`). Auto-generated titles are always `"Case
+<id>"` (no title at all when `case_col = NULL`).
+
+## Datasets
+
+`example_journey`'s `caseID` column is renamed `case_id`, and its
+`K_Number` column is dropped entirely — the secondary-identifier concept
+it represented no longer exists. `complaint_example` and
+`support_ticket_example` are unchanged.
+
 # eventviz 0.1.0
 
 Initial release. Turns the original single-file patient-journey timeline

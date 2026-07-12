@@ -15,7 +15,7 @@ make_example_journey <- function() {
   t <- function(hours) base_time + hours * 3600
 
   tibble::tribble(
-    ~caseID,   ~timestamp,    ~act_type,           ~activity,
+    ~case_id,  ~timestamp,    ~act_type,           ~activity,
     # ── Arrival ───────────────────────────────────────────────────────────────
     "SP-001",  t(0.00),  "ed_location_move",  "Emergency Department",
     "SP-001",  t(0.10),  "clerk_review",       "Ambulance handover documented",
@@ -60,8 +60,7 @@ make_example_journey <- function() {
 
     # ── Discharge ────────────────────────────────────────────────────────────
     "SP-001",  t(30.5),  "location_move",      "Discharged"
-  ) |>
-    dplyr::mutate(K_Number = "K12345", .after = caseID)
+  )
 }
 
 example_journey <- make_example_journey()

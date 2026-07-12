@@ -135,16 +135,16 @@
 <text x='471.55' y='179.84' text-anchor='middle' style='font-size: 8.80px; fill: #4D4D4D; font-family: sans;' textLength='22.02px' lengthAdjust='spacingAndGlyphs'>12:00</text>
 <text x='584.08' y='179.84' text-anchor='middle' style='font-size: 8.80px; fill: #4D4D4D; font-family: sans;' textLength='22.02px' lengthAdjust='spacingAndGlyphs'>13:00</text>
 <text x='696.61' y='179.84' text-anchor='middle' style='font-size: 8.80px; fill: #4D4D4D; font-family: sans;' textLength='22.02px' lengthAdjust='spacingAndGlyphs'>14:00</text>
-<text x='269.73' y='532.26' style='font-size: 9.00px; font-weight: bold; font-family: sans;' textLength='34.03px' lengthAdjust='spacingAndGlyphs'>Location</text>
-<rect x='309.24' y='520.52' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FFC273; fill-opacity: 0.85;' />
-<rect x='348.60' y='520.52' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #5ACCA0; fill-opacity: 0.85;' />
-<rect x='404.41' y='520.52' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #94D3FF; fill-opacity: 0.85;' />
-<text x='332.00' y='531.91' style='font-size: 8.00px; font-family: sans;' textLength='11.12px' lengthAdjust='spacingAndGlyphs'>ED</text>
-<text x='371.36' y='531.91' style='font-size: 8.00px; font-family: sans;' textLength='27.57px' lengthAdjust='spacingAndGlyphs'>Theatre</text>
-<text x='427.17' y='531.91' style='font-size: 8.00px; font-family: sans;' textLength='19.11px' lengthAdjust='spacingAndGlyphs'>Ward</text>
-<text x='316.17' y='562.49' style='font-size: 9.00px; font-weight: bold; font-family: sans;' textLength='42.54px' lengthAdjust='spacingAndGlyphs'>Event type</text>
-<circle cx='372.82' cy='559.39' r='3.77' style='stroke-width: 1.13; stroke: none; fill: #0072B2;' />
-<text x='386.94' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='12.90px' lengthAdjust='spacingAndGlyphs'>obs</text>
+<text x='316.17' y='532.26' style='font-size: 9.00px; font-weight: bold; font-family: sans;' textLength='42.54px' lengthAdjust='spacingAndGlyphs'>Event type</text>
+<circle cx='372.82' cy='529.16' r='3.77' style='stroke-width: 1.13; stroke: none; fill: #0072B2;' />
+<text x='386.94' y='531.91' style='font-size: 8.00px; font-family: sans;' textLength='12.90px' lengthAdjust='spacingAndGlyphs'>obs</text>
+<text x='276.24' y='562.49' style='font-size: 9.00px; font-weight: bold; font-family: sans;' textLength='21.02px' lengthAdjust='spacingAndGlyphs'>State</text>
+<rect x='302.74' y='550.75' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #FFC273; fill-opacity: 0.85;' />
+<rect x='342.09' y='550.75' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #5ACCA0; fill-opacity: 0.85;' />
+<rect x='397.90' y='550.75' width='17.28' height='17.28' style='stroke-width: 0.00; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #94D3FF; fill-opacity: 0.85;' />
+<text x='325.50' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='11.12px' lengthAdjust='spacingAndGlyphs'>ED</text>
+<text x='364.85' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='27.57px' lengthAdjust='spacingAndGlyphs'>Theatre</text>
+<text x='420.66' y='562.14' style='font-size: 8.00px; font-family: sans;' textLength='19.11px' lengthAdjust='spacingAndGlyphs'>Ward</text>
 <text x='7.97' y='16.23' style='font-size: 12.00px; font-weight: bold; font-family: sans;' textLength='96.06px' lengthAdjust='spacingAndGlyphs'>Cohort — 3 cases</text>
 </g>
 </svg>
