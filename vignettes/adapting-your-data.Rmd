@@ -12,7 +12,8 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 8,
-  fig.height = 5
+  fig.height = 5,
+  error = TRUE
 )
 ```
 
@@ -20,22 +21,45 @@ knitr::opts_chunk$set(
 library(eventviz)
 ```
 
-`plot_patient_journey()`'s defaults (`case_col = "caseID"`,
-`time_col = "timestamp"`, ...) match `example_journey`'s column names, but
-your own data almost certainly uses different ones — and might not even be
-in the right *shape* yet. This vignette covers both problems: matching
-column names via a schema, and reshaping wide milestone data into the long
-form eventviz expects.
+Every `eventviz` plotting function needs exactly one thing you must always
+declare yourself: `state_events`, the `act_type` value(s) that open a
+state. There's no default, and no value-level guessing — if you omit it,
+the error tells you what's actually in your data:
+
+```{r discovery-error}
+orders <- data.frame(
+  case_id   = c("A-1", "A-1", "A-1"),
+  timestamp = as.POSIXct("2026-01-01") + c(0, 3600, 7200),
+  act_type  = c("status", "note", "status"),
+  activity  = c("Raised", "Chased supplier", "Approved")
+)
+
+plot_case_timeline(orders, case_id = "A-1")
+```
+
+The listing is ordered by frequency, so the value you almost certainly
+want is usually first:
+
+```{r discovery-fixed}
+plot_case_timeline(orders, case_id = "A-1", state_events = "status")
+```
+
+Beyond `state_events`, `plot_case_timeline()`'s column-name defaults
+(`case_col = "case_id"`, `time_col = "timestamp"`, ...) match a lot of data
+out of the box, but your own data almost certainly uses different names —
+and might not even be in the right *shape* yet. This vignette covers both
+problems: matching column names via a schema, and reshaping wide milestone
+data into the long form eventviz expects.
 
 ## Column-name schemas
 
 You can always pass column names individually:
 
 ```{r manual, eval = FALSE}
-plot_patient_journey(
-  my_data, case_id = "12345",
-  time_col = "ts", case_col = "spell_id", act_type_col = "category",
-  activity_col = "label", patient_col = "mrn"
+plot_case_timeline(
+  my_data, case_id = "12345", state_events = "status",
+  time_col = "ts", case_col = "record_id", act_type_col = "category",
+  activity_col = "label"
 )
 ```
 
@@ -44,39 +68,48 @@ For a dataset you'll plot repeatedly, bundle the mapping into an
 
 ```{r schema-manual}
 my_schema <- event_log_schema(
-  time_col = "ts", case_col = "spell_id",
-  act_type_col = "category", activity_col = "label", patient_col = "mrn"
+  time_col = "ts", case_col = "record_id",
+  act_type_col = "category", activity_col = "label",
+  state_events = "status"
 )
 my_schema
 ```
 
 Pass it as `schema = my_schema`; any individual argument you *also* supply
 still wins over the schema, and anything neither supplies falls through to
-`plot_patient_journey()`'s own defaults.
+`plot_case_timeline()`'s own defaults.
 
 ### Autodetection
 
 If your column names are already conventional (`timestamp`/`time`,
-`case_id`/`spell_id`/`episode_id`, `act_type`/`event_type`,
-`activity`/`label`, `patient_id`/`mrn`, ...), you don't have to name them
-at all. `autodetect_schema()` matches column names against built-in
-candidate lists — exact case-insensitive match first, then a fuzzy
-edit-distance match — and resolves roles in a fixed order so one column is
-never silently claimed by two roles:
+`case_id`/`record_id`/`episode_id`, `act_type`/`event_type`,
+`activity`/`label`, ...), you don't have to name them at all.
+`autodetect_schema()` matches column names against built-in candidate
+lists — exact case-insensitive match first, then a fuzzy edit-distance
+match — and resolves roles in a fixed order so one column is never
+silently claimed by two roles:
 
 ```{r autodetect}
-autodetect_schema(example_journey)
+renamed <- data.frame(
+  case_idx  = c("A-1", "A-1"),
+  event_ts  = as.POSIXct("2026-01-01") + c(0, 3600),
+  act_typ   = c("status", "note"),
+  activty   = c("Raised", "Chased supplier")
+)
+autodetect_schema(renamed)
 ```
 
-Notice `caseID` and `K_Number` were matched fuzzily even though they don't
-exactly match the candidate lists (`case_id`, `patient_id`, ...). To use
-autodetection inline rather than as a separate step, pass the literal
-string `schema = "auto"` — this is the *only* way autodetection runs; a
+`case_idx`, `event_ts`, `act_typ`, and `activty` were all matched fuzzily
+even though none exactly match the candidate lists. To use autodetection
+inline rather than as a separate step, pass the literal string
+`schema = "auto"` — this is the *only* way autodetection runs; a
 manually-constructed `event_log_schema()` never triggers it, and omitting
 `schema` entirely just uses the function's hardcoded defaults:
 
 ```{r autodetect-inline}
-plot_patient_journey(example_journey, case_id = "SP-001", schema = "auto")
+plot_case_timeline(example_journey,
+                   state_events = c("location_move", "ed_location_move"),
+                   schema = "auto")
 ```
 
 If two candidate columns tie for one role, or a required role can't be
@@ -92,34 +125,36 @@ timestamp, rather than one row per event:
 ```{r wide-data}
 wide <- data.frame(
   case_id        = c("A", "B", "C"),
-  diagnosis      = c("Chest pain", "Fall", "Sepsis"),
-  arrival_time   = as.POSIXct(c("2024-01-01 08:00", "2024-01-01 09:15", "2024-01-01 10:00"), tz = "UTC"),
+  category       = c("Hardware", "Software", "Access"),
+  received_time  = as.POSIXct(c("2024-01-01 08:00", "2024-01-01 09:15", "2024-01-01 10:00"), tz = "UTC"),
   triage_time    = as.POSIXct(c("2024-01-01 08:10", "2024-01-01 09:20", "2024-01-01 10:05"), tz = "UTC"),
-  ward_time      = as.POSIXct(c("2024-01-01 11:30", NA,                  "2024-01-01 13:00"), tz = "UTC"),
-  discharge_time = as.POSIXct(c("2024-01-01 18:00", "2024-01-01 12:00",  "2024-01-02 09:00"), tz = "UTC")
+  review_time    = as.POSIXct(c("2024-01-01 11:30", NA,                  "2024-01-01 13:00"), tz = "UTC"),
+  closed_time    = as.POSIXct(c("2024-01-01 18:00", "2024-01-01 12:00",  "2024-01-02 09:00"), tz = "UTC")
 )
 wide
 ```
 
 `pivot_events_longer()` reshapes this into the long form
-`plot_patient_journey()` needs, in one call. Name which of the pivoted
-columns represent physical location moves via `location_cols` (everything
-else pivoted becomes a point event by default), and any non-pivoted
-columns (like `diagnosis` here) pass through untouched:
+`plot_case_timeline()` needs, in one call. Name which of the pivoted
+columns mark a state change via `state_cols` — they emit
+`act_type = "state_change"`, which is exactly what you then pass as
+`state_events` (everything else pivoted becomes a point event by
+default), and any non-pivoted columns (like `category` here) pass through
+untouched:
 
 ```{r pivot}
 long <- pivot_events_longer(
   wide,
-  case_col      = "case_id",
-  time_cols     = c("arrival_time", "triage_time", "ward_time", "discharge_time"),
-  location_cols = c("arrival_time", "ward_time", "discharge_time")
+  case_col   = "case_id",
+  time_cols  = c("received_time", "triage_time", "review_time", "closed_time"),
+  state_cols = c("received_time", "review_time", "closed_time")
 )
 long
 ```
 
 Two things happened automatically:
 
-* Case B's missing `ward_time` (`NA`) was dropped with a message, rather
+* Case B's missing `review_time` (`NA`) was dropped with a message, rather
   than becoming a bogus event at a missing timestamp — an `NA` milestone
   means "didn't happen for this case", not an error.
 * Activity labels were derived from the column names by stripping a
@@ -129,14 +164,13 @@ Two things happened automatically:
 
 Override either behaviour with `act_type_map`/`activity_map` (named
 vectors from a `time_cols` entry to your preferred value) if the
-auto-derived labels aren't what you want. The result feeds straight into
-`plot_patient_journey()`:
+auto-derived labels aren't what you want. The pivot and the plot agree out
+of the box — the result feeds straight into `plot_case_timeline()`:
 
 ```{r pivot-plot}
-plot_patient_journey(
+plot_case_timeline(
   long, case_id = "A",
-  case_col = "case_id", location_categories = "location_move",
-  patient_col = NULL
+  case_col = "case_id", state_events = "state_change"
 )
 ```
 

@@ -6,10 +6,14 @@
 # static output byte-identical rather than relying on eyeballs.
 #
 # Each baseline was rendered and visually approved once before committing.
-# vdiffr skips gracefully wherever its graphics stack is unavailable (CI on a
-# non-matching svglite/systemfonts, or a machine without vdiffr installed), so
-# these never produce false failures — they only catch genuine drift on a
-# matching runner.
+# The baselines are pixel-exact SVGs, so they are PINNED to the graphics
+# stack that produced them (R version + ggplot2/svglite/fonts): CI is the
+# canonical environment. When CI upgrades R/CRAN and every doppelganger
+# fails with "Snapshot of `testcase` has changed" while the functional
+# tests still pass, the baselines are stale, not the code — run the
+# update-snapshots workflow on a branch to regenerate them on the CI
+# runner, then visually review every image before merging. On machines
+# without vdiffr (or with NOT_CRAN unset) these tests skip.
 #
 # Run with: testthat::test_file("tests/testthat/test-render-snapshots.R")
 
@@ -17,11 +21,13 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
+STATE_EVENTS <- c("location_move", "ed_location_move")
+
 # ── 1. Default plot ─────────────────────────────────────────────────────────────
 
 test_that("default journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(example_journey, case_id = "SP-001")
+  p <- plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS)
   vdiffr::expect_doppelganger("journey-default", p)
 })
 
@@ -29,8 +35,8 @@ test_that("default journey plot matches its baseline", {
 
 test_that("show_labels journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(
-    example_journey, case_id = "SP-001",
+  p <- plot_case_timeline(
+    example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
     show_labels        = TRUE,
     exclude_categories = c("obs", "test_ordered")
   )
@@ -41,8 +47,8 @@ test_that("show_labels journey plot matches its baseline", {
 
 test_that("show_duration journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(example_journey, case_id = "SP-001",
-                            show_duration = TRUE)
+  p <- plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
+                          show_duration = TRUE)
   vdiffr::expect_doppelganger("journey-show-duration", p)
 })
 
@@ -50,8 +56,8 @@ test_that("show_duration journey plot matches its baseline", {
 
 test_that("label_boxes journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(example_journey, case_id = "SP-001",
-                            label_boxes = TRUE)
+  p <- plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
+                          label_boxes = TRUE)
   vdiffr::expect_doppelganger("journey-label-boxes", p)
 })
 
@@ -59,8 +65,8 @@ test_that("label_boxes journey plot matches its baseline", {
 
 test_that("terminal_activities journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(example_journey, case_id = "SP-001",
-                            terminal_activities = "Discharged")
+  p <- plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged")
   vdiffr::expect_doppelganger("journey-terminal-activities", p)
 })
 
@@ -68,8 +74,8 @@ test_that("terminal_activities journey plot matches its baseline", {
 
 test_that("reference_lines journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- plot_patient_journey(
-    example_journey, case_id = "SP-001",
+  p <- plot_case_timeline(
+    example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
     reference_lines = data.frame(offset_hours = 4, label = "4h target")
   )
   vdiffr::expect_doppelganger("journey-reference-line-4h", p)
@@ -82,8 +88,8 @@ test_that("reference_lines journey plot matches its baseline", {
 test_that("all-Stage-1-features journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
   p <- suppressMessages(
-    plot_patient_journey(
-      example_journey, case_id = "SP-001",
+    plot_case_timeline(
+      example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
       terminal_activities = "Discharged",
       show_duration       = TRUE,
       label_boxes         = TRUE,
@@ -96,7 +102,7 @@ test_that("all-Stage-1-features journey plot matches its baseline", {
 
 # ── 8. Swimlanes (Stage 4 combined view) ────────────────────────────────────────
 # The combined-features view re-approved with lanes switched on. Point events
-# are split into clinical tracks above the location band; duration labels and
+# are split into clinical tracks above the state band; duration labels and
 # the reference line sit below the lane floor by construction.
 
 example_journey_laned <- dplyr::mutate(
@@ -111,8 +117,8 @@ example_journey_laned <- dplyr::mutate(
 test_that("swimlane journey plot matches its baseline", {
   skip_if_not_installed("vdiffr")
   p <- suppressMessages(
-    plot_patient_journey(
-      example_journey_laned, case_id = "SP-001",
+    plot_case_timeline(
+      example_journey_laned, case_id = "SP-001", state_events = STATE_EVENTS,
       lane_col        = "lane",
       show_duration   = TRUE,
       reference_lines = data.frame(offset_hours = 4, label = "4h target")

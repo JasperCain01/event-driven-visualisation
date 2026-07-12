@@ -4,14 +4,14 @@
 \alias{autodetect_schema}
 \title{Autodetect an event log's column schema}
 \usage{
-autodetect_schema(data, location_categories = NULL)
+autodetect_schema(data, state_events = NULL)
 }
 \arguments{
 \item{data}{A data frame or tibble to detect column roles in.}
 
-\item{location_categories}{Character vector of `act_type` values that mark
-a location/state move — a pure passthrough into the returned schema,
-since this function detects *columns*, not values.}
+\item{state_events}{Character vector of `act_type` values that open a
+state — a pure passthrough into the returned schema, since this
+function detects *columns*, not values.}
 }
 \value{
 An [event_log_schema()] object.
@@ -19,8 +19,8 @@ An [event_log_schema()] object.
 \description{
 Builds an [event_log_schema()] by matching `data`'s column names against
 built-in per-role candidate lists (exact case-insensitive match first,
-then fuzzy `adist() <= 2`). Roles are resolved in a fixed order (time ->
-case -> act_type -> activity -> patient) and each data column may be
+then fuzzy `adist() <= 2` match). Roles are resolved in a fixed order
+(time -> case -> act_type -> activity) and each data column may be
 claimed by at most one role — once claimed, it is removed from
 consideration for every later role. A tie between two equally-good
 candidates for one role aborts rather than picking silently.

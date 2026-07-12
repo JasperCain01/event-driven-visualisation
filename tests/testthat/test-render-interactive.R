@@ -14,13 +14,16 @@ library(testthat)
 library(dplyr)
 library(ggplot2)
 
+STATE_EVENTS <- c("location_move", "ed_location_move")
+
 geom_classes <- function(p) vapply(p$layers, function(l) class(l$geom)[1], character(1))
 
 # ── Default (static) path is untouched ──────────────────────────────────────────
 
 test_that("interactive = FALSE (default) keeps plain, non-interactive geoms", {
-  p <- suppressMessages(plot_patient_journey(
-    example_journey, case_id = "SP-001", terminal_activities = "Discharged"
+  p <- suppressMessages(plot_case_timeline(
+    example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
+    terminal_activities = "Discharged"
   ))
   expect_s3_class(p, "ggplot")
   gc <- geom_classes(p)
@@ -34,7 +37,8 @@ test_that("interactive = TRUE requires ggiraph to be installed", {
   skip_if(requireNamespace("ggiraph", quietly = TRUE),
           "ggiraph is installed; guard path not exercised")
   expect_error(
-    plot_patient_journey(example_journey, case_id = "SP-001", interactive = TRUE),
+    plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
+                       interactive = TRUE),
     regexp = "ggiraph"
   )
 })
@@ -43,8 +47,8 @@ test_that("interactive = TRUE requires ggiraph to be installed", {
 
 test_that("interactive = TRUE returns a girafe htmlwidget", {
   skip_if_not_installed("ggiraph")
-  p <- suppressMessages(plot_patient_journey(
-    example_journey, case_id = "SP-001",
+  p <- suppressMessages(plot_case_timeline(
+    example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
     terminal_activities = "Discharged", interactive = TRUE
   ))
   expect_s3_class(p, "girafe")
@@ -63,18 +67,18 @@ test_that("interactive = TRUE returns a girafe htmlwidget", {
 
 .interactive_plot <- function(case_id = "SP-001", terminal_activities = NULL) {
   cols <- list(time = "timestamp", act_type = "act_type", activity = "activity",
-               case = "caseID", patient = "K_Number", lane = NULL)
-  spell <- validate_event_log(example_journey, cols, case_id,
-                              c("location_move", "ed_location_move"), tz = "UTC")
+               case = "case_id")
+  case_data <- validate_event_log(example_journey, cols, case_id,
+                                  STATE_EVENTS, tz = "UTC")
   tables <- suppressMessages(build_journey_tables(
-    spell, cols, c("location_move", "ed_location_move"),
+    case_data, cols, STATE_EVENTS,
     box_height = 0.25, terminal_activities = terminal_activities
   ))
   opts <- list(
-    box_height = 0.25, box_gap_prop = 0.003, title = "t", state_label = "Location",
-    x_scale = "datetime", facet_by = NULL, spell_open = FALSE, lanes_active = FALSE,
+    box_height = 0.25, box_gap_prop = 0.003, title = "t", state_label = "State",
+    x_scale = "datetime", facet_by = NULL, case_open = FALSE, lanes_active = FALSE,
     show_labels = FALSE, label_max = 30L, show_duration = FALSE, label_boxes = FALSE,
-    reference_lines = NULL, event_type_top_n = NULL, location_palette = NULL,
+    reference_lines = NULL, event_type_top_n = NULL, state_palette = NULL,
     event_palette = NULL, palette_style = "okabe", interactive = TRUE
   )
   render_journey_plot(tables$boxes, tables$events, opts)
@@ -92,13 +96,13 @@ test_that("the interactive ggplot builds cleanly (universal gate)", {
 
 # ── Tooltip content ──────────────────────────────────────────────────────────────
 
-test_that("box tooltips carry location, duration, entry/exit, no inferred caveat for a real end", {
+test_that("box tooltips carry state, duration, entry/exit, no inferred caveat for a real end", {
   skip_if_not_installed("ggiraph")
   gp <- .interactive_plot(terminal_activities = "Discharged")
   gc <- geom_classes(gp)
   box_data <- gp$layers[[which(gc == "GeomInteractiveRect")[1]]]$data
 
-  ed <- box_data[box_data$location == "Emergency Department", ]
+  ed <- box_data[box_data$state == "Emergency Department", ]
   expect_true(grepl("Emergency Department", ed$tooltip[1]))
   expect_true(grepl("4h 45m", ed$tooltip[1]))
   expect_true(grepl("Entry: 2024-03-15 08:30", ed$tooltip[1]))
@@ -119,7 +123,7 @@ test_that("an end_inferred box's tooltip carries the inferred caveat", {
   expect_true(grepl("\\(inferred\\)", last_box$tooltip))
 })
 
-test_that("terminal-marker tooltips carry the location name and its instant", {
+test_that("terminal-marker tooltips carry the state name and its instant", {
   skip_if_not_installed("ggiraph")
   gp <- .interactive_plot(terminal_activities = "Discharged")
   gc <- geom_classes(gp)

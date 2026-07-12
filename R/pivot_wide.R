@@ -2,7 +2,7 @@
 #
 # Milestone-style event logs are commonly stored wide: one row per case, one
 # column per timestamp ("arrival_time", "triage_time", "discharge_time", …).
-# plot_patient_journey() needs the long form (one row per event). This file
+# plot_case_timeline() needs the long form (one row per event). This file
 # reshapes the former into the latter.
 #
 # Public entry point: pivot_events_longer()
@@ -12,7 +12,7 @@
 
 # Turn a wide column name into a display label: strip a trailing timestamp
 # suffix, replace separators with spaces, then title-case.
-# "arrival_time" -> "Arrival"; "triage_at" -> "Triage"; "ward.name" -> "Ward Name"
+# "arrival_time" -> "Arrival"; "triage_at" -> "Triage"; "region.code" -> "Region Code"
 prettify_milestone <- function(x) {
   x <- sub("(_datetime|_date|_time|_ts|_at)$", "", x, ignore.case = TRUE)
   x <- gsub("[_.]", " ", x)
@@ -23,17 +23,16 @@ prettify_milestone <- function(x) {
 # ── pivot_events_longer ──────────────────────────────────────────────────────
 
 # Reshape a wide, one-row-per-case event log (a column per milestone
-# timestamp) into the long, one-row-per-event form plot_patient_journey()
+# timestamp) into the long, one-row-per-event form plot_case_timeline()
 # expects.
 #
 #   data          wide data frame, one row per case
 #   case_col      column identifying each case
 #   time_cols     character vector of wide column names to pivot
-#   patient_col   optional secondary identifier column, or NULL
-#   location_cols subset of time_cols that mark a physical location move;
-#                 these get act_type "location_move"
+#   state_cols    subset of time_cols that mark a state change;
+#                 these get act_type "state_change"
 #   act_type_map  named character vector: time_cols entry -> act_type, for
-#                 non-location milestones. NULL = milestone name is used as-is
+#                 non-state milestones. NULL = milestone name is used as-is
 #   activity_map  named character vector: time_cols entry -> display label.
 #                 NULL = derived from the milestone name (see
 #                 prettify_milestone())
@@ -41,24 +40,26 @@ prettify_milestone <- function(x) {
 #                 didn't happen for that case) — default TRUE
 #   tz            forwarded to coerce_datetime_column()
 #   time_col_out, act_type_col_out, activity_col_out
-#                 output column names, matching plot_patient_journey()'s
+#                 output column names, matching plot_case_timeline()'s
 #                 time_col/act_type_col/activity_col arguments
 #
 #' Pivot a wide milestone-timestamp event log into long form
 #'
 #' Milestone-style event logs are commonly stored wide: one row per case, one
 #' column per timestamp (`"arrival_time"`, `"triage_time"`,
-#' `"discharge_time"`, ...). [plot_patient_journey()] needs the long form
-#' (one row per event); this reshapes the former into the latter.
+#' `"discharge_time"`, ...). [plot_case_timeline()] needs the long form
+#' (one row per event); this reshapes the former into the latter. The pivot
+#' and the plot agree out of the box: state columns emit
+#' `act_type = "state_change"`, which is exactly what you pass as
+#' `state_events` to [plot_case_timeline()].
 #'
 #' @param data Wide data frame, one row per case.
 #' @param case_col Column identifying each case.
 #' @param time_cols Character vector of wide column names to pivot.
-#' @param patient_col Optional secondary identifier column, or `NULL`.
-#' @param location_cols Subset of `time_cols` that mark a physical location
-#'   move; these get `act_type = "location_move"`.
+#' @param state_cols Subset of `time_cols` that mark a state change; these
+#'   get `act_type = "state_change"`.
 #' @param act_type_map Named character vector: `time_cols` entry -> act_type,
-#'   for non-location milestones. `NULL` = the milestone name is used as-is.
+#'   for non-state milestones. `NULL` = the milestone name is used as-is.
 #' @param activity_map Named character vector: `time_cols` entry -> display
 #'   label. `NULL` = derived from the milestone name (see
 #'   `prettify_milestone()`): strip a trailing timestamp suffix, replace
@@ -67,12 +68,12 @@ prettify_milestone <- function(x) {
 #'   milestone didn't happen for that case). Default `TRUE`.
 #' @param tz Timezone forwarded to the internal datetime coercion.
 #' @param time_col_out,act_type_col_out,activity_col_out Output column
-#'   names, matching [plot_patient_journey()]'s `time_col`/`act_type_col`/
+#'   names, matching [plot_case_timeline()]'s `time_col`/`act_type_col`/
 #'   `activity_col` arguments.
 #'
-#' @return A long tibble: case, patient (if given), time, act_type, activity,
-#'   then any passthrough columns from `data` untouched — ready to pass
-#'   straight into [plot_patient_journey()].
+#' @return A long tibble: case, time, act_type, activity, then any
+#'   passthrough columns from `data` untouched — ready to pass straight into
+#'   [plot_case_timeline()].
 #'
 #' @examples
 #' wide <- data.frame(
@@ -82,15 +83,14 @@ prettify_milestone <- function(x) {
 #' )
 #' pivot_events_longer(wide, case_col = "case_id",
 #'                      time_cols = c("arrival_time", "discharge_time"),
-#'                      location_cols = c("arrival_time", "discharge_time"))
+#'                      state_cols = c("arrival_time", "discharge_time"))
 #'
 #' @export
 pivot_events_longer <- function(
     data,
     case_col,
     time_cols,
-    patient_col      = NULL,
-    location_cols    = NULL,
+    state_cols       = NULL,
     act_type_map     = NULL,
     activity_map     = NULL,
     drop_na          = TRUE,
@@ -101,7 +101,7 @@ pivot_events_longer <- function(
 ) {
 
   # ── 1. case_col and time_cols must exist ───────────────────────────────────
-  required <- c(case_col, time_cols, patient_col)
+  required <- c(case_col, time_cols)
   missing  <- setdiff(required, names(data))
 
   if (length(missing) > 0) {
@@ -112,12 +112,12 @@ pivot_events_longer <- function(
     ))
   }
 
-  # ── 2. location_cols must be a subset of time_cols ─────────────────────────
-  if (!is.null(location_cols)) {
-    offenders <- setdiff(location_cols, time_cols)
+  # ── 2. state_cols must be a subset of time_cols ────────────────────────────
+  if (!is.null(state_cols)) {
+    offenders <- setdiff(state_cols, time_cols)
     if (length(offenders) > 0) {
       cli::cli_abort(c(
-        "{.arg location_cols} must be a subset of {.arg time_cols}.",
+        "{.arg state_cols} must be a subset of {.arg time_cols}.",
         "x" = "Not present in {.arg time_cols}: {.val {offenders}}"
       ))
     }
@@ -128,7 +128,7 @@ pivot_events_longer <- function(
     data[[col]] <- coerce_datetime_column(data[[col]], col, tz = tz)
   }
 
-  # ── 4. Pivot longer — passthrough columns (patient, metadata) come along
+  # ── 4. Pivot longer — passthrough columns (metadata) come along
   #        automatically ───────────────────────────────────────────────────────
   long <- tidyr::pivot_longer(
     data,
@@ -159,8 +159,8 @@ pivot_events_longer <- function(
   milestones <- unique(long$.milestone)
 
   act_type_lookup <- stats::setNames(vapply(milestones, function(m) {
-    if (!is.null(location_cols) && m %in% location_cols) {
-      "location_move"
+    if (!is.null(state_cols) && m %in% state_cols) {
+      "state_change"
     } else if (!is.null(act_type_map) && m %in% names(act_type_map)) {
       unname(act_type_map[[m]])
     } else {
@@ -182,7 +182,7 @@ pivot_events_longer <- function(
   # ── 8. Drop .milestone; fixed column order ──────────────────────────────────
   long$.milestone <- NULL
 
-  front       <- c(case_col, patient_col, time_col_out, act_type_col_out, activity_col_out)
+  front       <- c(case_col, time_col_out, act_type_col_out, activity_col_out)
   passthrough <- setdiff(names(long), front)
 
   long[, c(front, passthrough)]

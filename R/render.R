@@ -6,10 +6,10 @@
 #   render_journey_plot() — assembles those layers with the x-scale, y-scale,
 #                           optional facet, and theme into a finished ggplot.
 #
-# Splitting the geoms out lets a second consumer (plot_journey_cohort()) reuse
+# Splitting the geoms out lets a second consumer (plot_cohort_timeline()) reuse
 # the exact same layer construction across facet panels, and lets the x-axis be
-# either datetime (single spell, absolute time) or numeric elapsed-hours (a
-# cohort of start-aligned spells) without duplicating any geom code.
+# either datetime (single case, absolute time) or numeric elapsed-hours (a
+# cohort of start-aligned cases) without duplicating any geom code.
 #
 # Because all data shaping is done upstream, swapping this for a plotly/ggiraph
 # renderer is a matter of writing a sibling assembler consuming journey_layers().
@@ -42,9 +42,9 @@ journey_layers <- function(boxes, events, opts) {
   label_boxes      <- opts$label_boxes
   reference_lines  <- opts$reference_lines
   event_type_top_n <- opts$event_type_top_n
-  spell_open       <- opts$spell_open %||% FALSE
+  case_open        <- opts$case_open %||% FALSE
   lanes_active     <- opts$lanes_active %||% FALSE
-  location_palette <- opts$location_palette
+  state_palette    <- opts$state_palette
   event_palette    <- opts$event_palette
   palette_style    <- opts$palette_style
   box_height       <- opts$box_height
@@ -86,11 +86,11 @@ journey_layers <- function(boxes, events, opts) {
 
   # Axis-break selection sees the widest single panel, not the sum of panel
   # spans plus the calendar dead time between cases. Without faceting this is
-  # exactly the whole-journey span, as before.
+  # exactly the whole-timeline span, as before.
   total_span <- max(boxes$.gap_span)
-  # Anchor for reference_lines' offset_hours: the spell's first event. When a
-  # synthetic pre-admission box exists it already carries the earliest event
-  # timestamp, so min(boxes$xmin) covers both cases.
+  # Anchor for reference_lines' offset_hours: the case's first event. When a
+  # synthetic before-first-state box exists it already carries the earliest
+  # event timestamp, so min(boxes$xmin) covers both cases.
   first_event_time <- min(boxes$xmin)
 
   # Midline y for event points
@@ -113,7 +113,7 @@ journey_layers <- function(boxes, events, opts) {
   show_lane_axis <- lanes_active && n_events > 0 && "lane" %in% names(events)
   event_points   <- if (lanes_active) events else dplyr::mutate(events, y = midline_y)
 
-  # Split terminal markers (zero-duration end states, e.g. "Discharged") from
+  # Split terminal markers (zero-duration end states, e.g. "Closed") from
   # true stays — terminals render as a vertical marker, never as a box.
   term_boxes <- dplyr::filter(boxes, terminal)
   term_boxes$.gap_span <- NULL   # render-only helper; keep layer data clean
@@ -138,12 +138,12 @@ journey_layers <- function(boxes, events, opts) {
   )
 
   # ── Colour scales ──────────────────────────────────────────────────────────
-  loc_levels <- unique(boxes$location)
-  evt_levels <- if (nrow(events) > 0) unique(events$act_type) else character(0)
+  state_levels <- unique(boxes$state)
+  evt_levels   <- if (nrow(events) > 0) unique(events$act_type) else character(0)
 
   # Use caller-supplied palettes if provided, otherwise auto-generate
-  loc_colours <- location_palette %||%
-    journey_palette(loc_levels, "location", palette_style)
+  state_colours <- state_palette %||%
+    journey_palette(state_levels, "state", palette_style)
   evt_colours <- event_palette %||%
     journey_palette(evt_levels, "event", palette_style)
 
@@ -153,10 +153,10 @@ journey_layers <- function(boxes, events, opts) {
   # variable was added upstream, so faceting splits them automatically.
   layers <- list()
 
-  # ── Layer 1: location boxes ──────────────────────────────────────────────
+  # ── Layer 1: state boxes ─────────────────────────────────────────────────
   # Uses xmax_render (= xmax minus a small gap proportion) so adjacent boxes
   # are visually separated. The gap is purely cosmetic — stored xmax/duration
-  # values reflect the true clinical interval.
+  # values reflect the true interval.
   #
   # Interactive mode (Stage 7) swaps in ggiraph's geom_rect_interactive() with
   # a tooltip built from the TRUE (unrendered) xmin/xmax so a nudged/staggered
@@ -166,7 +166,7 @@ journey_layers <- function(boxes, events, opts) {
     box_tooltips <- dplyr::mutate(
       boxes,
       tooltip = paste0(
-        location, "\n",
+        state, "\n",
         format_duration(as.numeric(duration, units = "secs")),
         ifelse(end_inferred, " (end inferred)", ""), "\n",
         "Entry: ", .format_instant(xmin, x_scale), "\n",
@@ -182,7 +182,7 @@ journey_layers <- function(boxes, events, opts) {
           xmax    = xmax_render,
           ymin    = ymin,
           ymax    = ymax,
-          fill    = location,
+          fill    = state,
           tooltip = tooltip
         ),
         colour    = NA,
@@ -199,7 +199,7 @@ journey_layers <- function(boxes, events, opts) {
           xmax  = xmax_render,
           ymin  = ymin,
           ymax  = ymax,
-          fill  = location
+          fill  = state
         ),
         colour    = NA,    # no border needed — gap between boxes provides separation
         linewidth = 0,
@@ -247,22 +247,22 @@ journey_layers <- function(boxes, events, opts) {
     layers <- c(layers, list(
       ggplot2::geom_text(
         data = box_labels,
-        ggplot2::aes(x = x_mid, y = box_height / 2 + 0.06, label = location),
+        ggplot2::aes(x = x_mid, y = box_height / 2 + 0.06, label = state),
         size          = 2.6,
         check_overlap = TRUE
       )
     ))
   }
 
-  # ── Layer 1c: ongoing-spell indication ────────────────────────────────────
+  # ── Layer 1c: ongoing-case indication ─────────────────────────────────────
   # Converse of the terminal-state marker: the case never reached a state
   # named in terminal_activities — the data feed just stopped. Marks the
   # final box's right edge as open-ended rather than implying its (inferred)
   # xmax is a known, true end. Data-driven (not annotate()) so it faces the
   # correct panel when faceted.
   #
-  # Single-case: opts$spell_open flags the one spell. Cohort: opts$open_cases
-  # lists the case ids whose spell never reached a terminal state, and each
+  # Single-case: opts$case_open flags the one case. Cohort: opts$open_cases
+  # lists the case ids whose case never reached a terminal state, and each
   # open case's final box gets the marker in its own facet panel.
   open_cases <- opts$open_cases
   if (!is.null(facet_by) && facet_by %in% names(boxes) &&
@@ -272,7 +272,7 @@ journey_layers <- function(boxes, events, opts) {
       dplyr::group_by(.data[[facet_by]]) |>
       dplyr::slice_tail(n = 1) |>
       dplyr::ungroup()
-  } else if (spell_open && nrow(boxes) > 0) {
+  } else if (case_open && nrow(boxes) > 0) {
     final_box <- dplyr::slice_tail(boxes, n = 1)
   } else {
     final_box <- NULL
@@ -335,13 +335,13 @@ journey_layers <- function(boxes, events, opts) {
   }
 
   # ── Layer 2: terminal state markers ──────────────────────────────────────
-  # A terminal state (e.g. "Discharged") is an instant, not a stay: a vertical
+  # A terminal state (e.g. "Closed") is an instant, not a stay: a vertical
   # bar at its timestamp with a direct label, outside the fill legend.
   if (nrow(term_boxes) > 0) {
     if (interactive) {
       term_tooltips <- dplyr::mutate(
         term_boxes,
-        tooltip = paste0(location, "\nAt: ", .format_instant(xmin, x_scale))
+        tooltip = paste0(state, "\nAt: ", .format_instant(xmin, x_scale))
       )
       layers <- c(layers, list(
         ggiraph::geom_segment_interactive(
@@ -352,7 +352,7 @@ journey_layers <- function(boxes, events, opts) {
         ),
         ggiraph::geom_text_interactive(
           data = term_tooltips,
-          ggplot2::aes(x = xmin, y = ymax, label = location, tooltip = tooltip),
+          ggplot2::aes(x = xmin, y = ymax, label = state, tooltip = tooltip),
           hjust    = 1.1,
           vjust    = -0.6,
           size     = 3,
@@ -370,7 +370,7 @@ journey_layers <- function(boxes, events, opts) {
         ),
         ggplot2::geom_text(
           data = term_boxes,
-          ggplot2::aes(x = xmin, y = ymax, label = location),
+          ggplot2::aes(x = xmin, y = ymax, label = state),
           hjust    = 1.1,
           vjust    = -0.6,
           size     = 3,
@@ -465,7 +465,7 @@ journey_layers <- function(boxes, events, opts) {
   list(
     layers = layers,
     meta   = list(
-      loc_colours        = loc_colours,
+      state_colours      = state_colours,
       evt_colours        = evt_colours,
       evt_levels         = evt_levels,
       n_events           = n_events,
@@ -486,14 +486,14 @@ journey_layers <- function(boxes, events, opts) {
 # scales, and theme. Returns a ggplot ready for display.
 #
 # opts$facet_by (default NULL) names a column present in every layer's data on
-# which to facet_wrap — set by plot_journey_cohort(); NULL leaves a single
-# panel, byte-identical to the pre-Stage-5 single-spell output.
+# which to facet_wrap — set by plot_cohort_timeline(); NULL leaves a single
+# panel, byte-identical to the pre-Stage-5 single-case output.
 render_journey_plot <- function(boxes, events, opts) {
 
   x_scale     <- opts$x_scale %||% "datetime"
   box_height  <- opts$box_height
   plot_title  <- opts$title
-  state_label <- opts$state_label %||% "Location"
+  state_label <- opts$state_label %||% "State"
   facet_by    <- opts$facet_by
 
   # ── Geom layers + the metadata the scales/theme need ───────────────────────
@@ -540,7 +540,7 @@ render_journey_plot <- function(boxes, events, opts) {
     x_scale_layer +
     y_scale +
     ggplot2::scale_fill_manual(
-      values = meta$loc_colours,
+      values = meta$state_colours,
       name   = state_label
     )
 
@@ -565,7 +565,7 @@ render_journey_plot <- function(boxes, events, opts) {
   }
 
   # ── Optional cohort faceting ───────────────────────────────────────────────
-  # facet_scales is "free_x" for absolute-time cohorts (each spell keeps its own
+  # facet_scales is "free_x" for absolute-time cohorts (each case keeps its own
   # date range) and "fixed" for start-aligned cohorts (compared on one shared
   # elapsed-hours axis). NULL facet_by → single panel, unchanged.
   if (!is.null(facet_by)) {
@@ -592,7 +592,7 @@ render_journey_plot <- function(boxes, events, opts) {
   }
 
   p <- p +
-    theme_journey(base_size = 11) +
+    theme_timeline(base_size = 11) +
     ggplot2::theme(
       # y-axis carries no meaningful information in a single-lane timeline,
       # but names each lane when swimlanes are active

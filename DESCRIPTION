@@ -1,13 +1,14 @@
 Package: eventviz
-Version: 0.1.0
+Version: 0.2.0
 Title: Event Log Visualisation
-Description: Visualise any timestamped event log as a location-band timeline,
+Description: Visualise any timestamped event log as a state-band timeline,
     a staircase diagram for linear stage processes, faceted cohort
-    comparisons, or aggregate/statistical summaries. Originally built for
-    patient journeys through clinical locations, but equally suited to any
-    process where a case occupies one exclusive state at a time - a
-    complaint moving through handling stages, a support ticket through
-    statuses, an order through an approval pipeline.
+    comparisons, or aggregate/statistical summaries, for any process where
+    a case occupies one exclusive state at a time - a complaint moving
+    through handling stages, a support ticket through statuses, an order
+    through an approval pipeline. The bundled example dataset happens to be
+    a clinical patient journey, but the package itself carries no
+    healthcare-specific defaults or vocabulary.
 Authors@R: person("Jasper", "Cain", role = c("aut", "cre"),
     email = "jcainsecondemail@gmail.com")
 License: MIT + file LICENSE

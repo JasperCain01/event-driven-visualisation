@@ -7,7 +7,7 @@ library(dplyr)
 library(ggplot2)
 
 # ── Shared fixture ────────────────────────────────────────────────────────────
-# 3 cases, cols case_id, patient_id, arrival_time, triage_time, ward_time,
+# 3 cases, cols case_id, arrival_time, triage_time, ward_time,
 # discharge_time, diagnosis.
 
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")
@@ -16,7 +16,6 @@ hrs <- function(h) t0 + h * 3600
 make_wide_fixture <- function() {
   tibble::tibble(
     case_id        = c("C1", "C2", "C3"),
-    patient_id     = c("P1", "P2", "P3"),
     arrival_time   = c(hrs(0),   hrs(1),   hrs(2)),
     triage_time    = c(hrs(0.5), hrs(1.5), NA),       # never triaged for C3
     ward_time      = c(hrs(1),   hrs(2.5), hrs(3)),
@@ -32,26 +31,25 @@ time_cols <- c("arrival_time", "triage_time", "ward_time", "discharge_time")
 test_that("basic pivot produces correct row count and act_type values", {
   long <- suppressMessages(pivot_events_longer(
     make_wide_fixture(),
-    case_col      = "case_id",
-    time_cols     = time_cols,
-    patient_col   = "patient_id",
-    location_cols = c("arrival_time", "ward_time")
+    case_col   = "case_id",
+    time_cols  = time_cols,
+    state_cols = c("arrival_time", "ward_time")
   ))
 
   # 3 + 3 + 2 = 8 rows for arrival/ward/discharge (always present) plus
   # triage for C1/C2 only (C3's is NA and dropped) = 3*3 + 2 = 11
   expect_equal(nrow(long), 11)
 
-  expect_true(all(c("case_id", "patient_id", "timestamp", "act_type",
+  expect_true(all(c("case_id", "timestamp", "act_type",
                     "activity", "diagnosis") %in% names(long)))
 
   arrival_rows <- long |> dplyr::filter(activity == "Arrival")
-  expect_equal(unique(arrival_rows$act_type), "location_move")
+  expect_equal(unique(arrival_rows$act_type), "state_change")
 
   ward_rows <- long |> dplyr::filter(activity == "Ward")
-  expect_equal(unique(ward_rows$act_type), "location_move")
+  expect_equal(unique(ward_rows$act_type), "state_change")
 
-  triage_rows <- long |> dplyr::filter(case_id == "C1", act_type != "location_move",
+  triage_rows <- long |> dplyr::filter(case_id == "C1", act_type != "state_change",
                                        act_type != "discharge_time")
   expect_true(nrow(triage_rows) >= 1)
 })
@@ -73,11 +71,11 @@ test_that("milestone labels are suffix-stripped, not raw column names", {
 test_that("act_type_map and activity_map override the defaults", {
   long <- suppressMessages(pivot_events_longer(
     make_wide_fixture(),
-    case_col      = "case_id",
-    time_cols     = time_cols,
-    location_cols = c("arrival_time", "ward_time"),
-    act_type_map  = c(triage_time = "triage_event"),
-    activity_map  = c(discharge_time = "Discharged Home")
+    case_col     = "case_id",
+    time_cols    = time_cols,
+    state_cols   = c("arrival_time", "ward_time"),
+    act_type_map = c(triage_time = "triage_event"),
+    activity_map = c(discharge_time = "Discharged Home")
   ))
 
   triage_rows <- long |> dplyr::filter(act_type == "triage_event")
@@ -105,11 +103,11 @@ test_that("missing time_cols entry aborts naming it", {
   expect_match(conditionMessage(err), "not_a_column")
 })
 
-test_that("location_cols not a subset of time_cols aborts naming the offender", {
+test_that("state_cols not a subset of time_cols aborts naming the offender", {
   err <- expect_error(
     pivot_events_longer(make_wide_fixture(), case_col = "case_id",
                         time_cols = c("arrival_time", "ward_time"),
-                        location_cols = c("arrival_time", "discharge_time"))
+                        state_cols = c("arrival_time", "discharge_time"))
   )
   expect_match(conditionMessage(err), "discharge_time")
 })
@@ -143,28 +141,30 @@ test_that("equal-timestamp milestones pivot cleanly and render under the univers
 
   long <- suppressMessages(pivot_events_longer(
     wide, case_col = "case_id", time_cols = time_cols,
-    patient_col = "patient_id", location_cols = c("arrival_time", "ward_time")
+    state_cols = c("arrival_time", "ward_time")
   ))
 
-  p <- plot_patient_journey(
-    long, case_id = "C1", case_col = "case_id", patient_col = "patient_id",
-    time_col = "timestamp", act_type_col = "act_type", activity_col = "activity"
+  p <- plot_case_timeline(
+    long, case_id = "C1", case_col = "case_id",
+    time_col = "timestamp", act_type_col = "act_type", activity_col = "activity",
+    state_events = "state_change"
   )
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-# ── End-to-end into plot_patient_journey() ──────────────────────────────────
+# ── End-to-end into plot_case_timeline() ─────────────────────────────────────
 
-test_that("pivoted output feeds plot_patient_journey() directly", {
+test_that("pivoted output feeds plot_case_timeline() directly", {
   long <- suppressMessages(pivot_events_longer(
     make_wide_fixture(), case_col = "case_id", time_cols = time_cols,
-    patient_col = "patient_id", location_cols = c("arrival_time", "ward_time")
+    state_cols = c("arrival_time", "ward_time")
   ))
 
-  p <- plot_patient_journey(
-    long, case_id = "C2", case_col = "case_id", patient_col = "patient_id",
-    time_col = "timestamp", act_type_col = "act_type", activity_col = "activity"
+  p <- plot_case_timeline(
+    long, case_id = "C2", case_col = "case_id",
+    time_col = "timestamp", act_type_col = "act_type", activity_col = "activity",
+    state_events = "state_change"
   )
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
@@ -172,8 +172,7 @@ test_that("pivoted output feeds plot_patient_journey() directly", {
 
 test_that("passthrough columns (e.g. diagnosis) survive the pivot untouched", {
   long <- suppressMessages(pivot_events_longer(
-    make_wide_fixture(), case_col = "case_id", time_cols = time_cols,
-    patient_col = "patient_id"
+    make_wide_fixture(), case_col = "case_id", time_cols = time_cols
   ))
 
   expect_true("diagnosis" %in% names(long))

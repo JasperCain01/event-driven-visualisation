@@ -21,17 +21,17 @@ library(eventviz)
 ```
 
 This vignette walks through `eventviz`'s core function,
-`plot_patient_journey()`, on the bundled `example_journey` dataset: a
-synthetic patient spell moving through Ambulance arrival, Emergency
+`plot_case_timeline()`, on the bundled `example_journey` dataset: a
+synthetic patient case moving through Ambulance arrival, Emergency
 Department, Acute Medical Unit, Discharge Lounge, and Discharged, with
 clinical point events (observations, tests, doctor reviews) sprinkled
 throughout.
 
 ## The shape of an event log
 
-`plot_patient_journey()` expects one row per event, with (at minimum) a
-case identifier, a timestamp, an event-type column marking which rows are
-*moves* to a new exclusive state, and an activity/label column:
+`plot_case_timeline()` expects one row per event, with (at minimum) a
+case identifier, a timestamp, an event-type column marking which rows
+open a new exclusive state, and an activity/label column:
 
 ```{r}
 head(example_journey)
@@ -40,45 +40,52 @@ head(example_journey)
 Here `act_type == "ed_location_move"` or `"location_move"` marks a move to
 a new location; everything else (`obs`, `clerk_review`, `test_ordered`,
 ...) is an instantaneous point event that gets plotted on the timeline but
-doesn't create a new box.
+doesn't create a new box. You tell `eventviz` which values open a state
+via `state_events` — there's no default, and no guessing: if you omit it,
+the error lists exactly what's in your data.
 
 ## The default plot
 
 ```{r default}
-plot_patient_journey(example_journey, case_id = "SP-001")
+plot_case_timeline(example_journey,
+                   state_events = c("location_move", "ed_location_move"))
 ```
 
-Each coloured box is a location the case occupied over an interval; each
-point is an instantaneous event, positioned on the midline of whichever
-box it fell inside. The legend splits location fills from event-type
-shapes/colours so the two never share a hue by default (the
-colourblind-safe `"okabe"` palette — see `?journey_palette` for the
-`"brewer"` alternative).
+`example_journey` has only one case, so `case_id` didn't need to be
+supplied — `eventviz` used the only one available and said so. Each
+coloured box is a state the case occupied over an interval; each point is
+an instantaneous event, positioned on the midline of whichever box it fell
+inside. The legend splits state fills from event-type shapes/colours so
+the two never share a hue by default (the colourblind-safe `"okabe"`
+palette — see `?journey_palette` for the `"brewer"` alternative).
 
 ## Duration labels
 
 ```{r show-duration}
-plot_patient_journey(example_journey, case_id = "SP-001", show_duration = TRUE)
+plot_case_timeline(example_journey,
+                   state_events = c("location_move", "ed_location_move"),
+                   show_duration = TRUE)
 ```
 
 The formatted duration appears above each non-terminal box. If a box's end
 time had to be *inferred* (the data feed stopped before recording the next
-move), its label carries a trailing `"+"` so the plot never overclaims
-precision it doesn't have.
+state event), its label carries a trailing `"+"` so the plot never
+overclaims precision it doesn't have.
 
 ## Terminal states
 
-Without more information, the final box in a spell has no natural end —
-`plot_patient_journey()` has to infer one (by default, extending to the
-last recorded event). For a spell that reaches a genuinely *terminal*
+Without more information, the final box in a case has no natural end —
+`plot_case_timeline()` has to infer one (by default, extending to the
+last recorded event). For a case that reaches a genuinely *terminal*
 state — "Discharged", "Closed", "Formal letter sent" — that inference is
 wrong: the case didn't spend hours "being Discharged". Tell the function
 which activities are terminal and it renders them as an instantaneous
 marker instead:
 
 ```{r terminal}
-plot_patient_journey(
+plot_case_timeline(
   example_journey, case_id = "SP-001",
+  state_events = c("location_move", "ed_location_move"),
   terminal_activities = "Discharged"
 )
 ```
@@ -95,14 +102,15 @@ Overlay a target/threshold line — useful for service standards like a
 4-hour ED target:
 
 ```{r reference-lines}
-plot_patient_journey(
+plot_case_timeline(
   example_journey, case_id = "SP-001",
+  state_events = c("location_move", "ed_location_move"),
   reference_lines = data.frame(offset_hours = 4, label = "4h target")
 )
 ```
 
 `reference_lines` takes a data frame with one row per line: `offset_hours`
-(numeric, hours from the spell's first event) and `label`.
+(numeric, hours from the case's first event) and `label`.
 
 ## Direct labels and event bucketing
 
@@ -111,8 +119,9 @@ directly at its centre, and `event_type_top_n` collapses a long tail of
 rare event types into `"Other"` so the legend stays readable:
 
 ```{r combined}
-plot_patient_journey(
+plot_case_timeline(
   example_journey, case_id = "SP-001",
+  state_events = c("location_move", "ed_location_move"),
   label_boxes      = TRUE,
   event_type_top_n = 3
 )
@@ -125,14 +134,18 @@ useful for debugging, or for building your own custom visualisation on top
 of the same box/event derivation:
 
 ```{r return-data}
-res <- plot_patient_journey(example_journey, case_id = "SP-001", return_data = TRUE)
+res <- plot_case_timeline(
+  example_journey, case_id = "SP-001",
+  state_events = c("location_move", "ed_location_move"),
+  return_data = TRUE
+)
 names(res)
 res$summary
 ```
 
-`summary` is one row per location stay (case, location, entry/exit,
-duration, and whether the end was inferred) — the same shape
-`summarise_journey_durations()` returns across a whole cohort. See the
+`summary` is one row per state stay (case, state, entry/exit, duration,
+and whether the end was inferred) — the same shape
+`summarise_case_durations()` returns across a whole cohort. See the
 [cohort analysis](cohort-analysis.html) vignette for more on aggregating
 across cases.
 

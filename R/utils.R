@@ -2,15 +2,15 @@
 
 # ── Box-end inference ──────────────────────────────────────────────────────────
 
-# Infer the xmax for the final location box, which has no successor move event.
-# strategy: "last_event" → extend to the last event in the spell (default);
-#           falls back to "median" if the last event IS the move itself, then
-#           to "fixed" if there's only one box (no median possible).
+# Infer the xmax for the final state box, which has no successor state event.
+# strategy: "last_event" → extend to the last event in the case (default);
+#           falls back to "median" if the last event IS the state event itself,
+#           then to "fixed" if there's only one box (no median possible).
 #   "median" → extend by the median duration of all preceding boxes.
 #   "fixed"  → extend by a fixed 30-minute window.
-# Trade-off: "last_event" is clinically most accurate but silently clips if
-# the data feed ends abruptly; "median" is a reasonable imputation; "fixed"
-# is a last-resort visual-only fallback.
+# Trade-off: "last_event" is most accurate but silently clips if the data feed
+# ends abruptly; "median" is a reasonable imputation; "fixed" is a last-resort
+# visual-only fallback.
 infer_box_end <- function(last_xmin, all_timestamps, preceding_durations,
                           strategy = "last_event") {
 
@@ -98,14 +98,14 @@ suggest_matches <- function(not_found, available, max_dist = 3) {
 # palette. Returns a named character vector level → hex colour.
 #
 # palette_style:
-#   "okabe"  (default) — colourblind-safe. Locations get the Okabe-Ito hues
+#   "okabe"  (default) — colourblind-safe. States get the Okabe-Ito hues
 #     lightened 40% toward white (so text/points overlaid on a box stay
 #     legible); events get the same 8 hues *offset by 4 positions* so a
-#     location and event sharing an index never share a hue (event 1 gets
+#     state and event sharing an index never share a hue (event 1 gets
 #     colour 5, wrapping). Recycles past 8 distinct values.
-#   "brewer" — the original Set2 (location) / Dark2 (event) palette, kept
+#   "brewer" — the original Set2 (state) / Dark2 (event) palette, kept
 #     verbatim for callers pinning the pre-1f default output.
-journey_palette <- function(levels, type = c("location", "event"),
+journey_palette <- function(levels, type = c("state", "event"),
                             palette_style = c("okabe", "brewer")) {
   type          <- match.arg(type)
   palette_style <- match.arg(palette_style)
@@ -118,7 +118,7 @@ journey_palette <- function(levels, type = c("location", "event"),
     idx    <- ((seq_len(n) - 1L + offset) %% length(.okabe_ito)) + 1L
     cols   <- .okabe_ito[idx]
 
-    if (type == "location") {
+    if (type == "state") {
       cols <- if (requireNamespace("colorspace", quietly = TRUE)) {
         colorspace::lighten(cols, amount = 0.4)
       } else {
@@ -134,13 +134,13 @@ journey_palette <- function(levels, type = c("location", "event"),
   # palette_style == "brewer" — original behaviour, kept verbatim.
   # Use RColorBrewer if available (likely in any ggplot2 install context),
   # otherwise fall back to hcl.colors which is base R since 4.0
-  palette_name <- if (type == "location") "Set2" else "Dark2"
+  palette_name <- if (type == "state") "Set2" else "Dark2"
   max_brewer   <- if (palette_name == "Set2") 8L else 8L
 
   if (requireNamespace("RColorBrewer", quietly = TRUE) && n <= max_brewer) {
     cols <- RColorBrewer::brewer.pal(max(3L, n), palette_name)[seq_len(n)]
   } else {
-    cols <- grDevices::hcl.colors(n, palette = if (type == "location") "Pastel 1" else "Dark 3")
+    cols <- grDevices::hcl.colors(n, palette = if (type == "state") "Pastel 1" else "Dark 3")
   }
 
   stats::setNames(cols, levels)
@@ -197,9 +197,9 @@ format_duration <- function(secs) {
 
 # ── reference_lines validation ─────────────────────────────────────────────────
 
-# Validate the shape of the `reference_lines` argument to plot_patient_journey():
+# Validate the shape of the `reference_lines` argument to plot_case_timeline():
 # NULL (no reference lines) or a data frame with a numeric `offset_hours`
-# column (hours from the spell's first event) and a `label` column.
+# column (hours from the case's first event) and a `label` column.
 validate_reference_lines <- function(reference_lines) {
   if (is.null(reference_lines)) return(invisible(NULL))
 
