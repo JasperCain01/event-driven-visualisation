@@ -1,7 +1,7 @@
 # stage_ladder.R — Staircase view of a linear stage process (Stage 5b)
 #
-# The band layout (plot_patient_journey()) answers "what happened when" by
-# putting time on the x-axis and a single location band on the y-axis. For a
+# The band layout (plot_case_timeline()) answers "what happened when" by
+# putting time on the x-axis and a single state band on the y-axis. For a
 # strictly linear process — a complaint moving Acknowledgement -> Triage -> ...
 # -> Formal letter sent, a purchase order raised -> approved -> fulfilled — the
 # more compelling question is "where does the time go", which wants the stage on
@@ -10,7 +10,7 @@
 # Gantt chart, with thin grey connectors forming the staircase.
 #
 # It never re-derives box geometry: stages ARE boxes, so it calls the same
-# derive_location_boxes() the band layout uses. Only the rendering differs.
+# derive_state_boxes() the band layout uses. Only the rendering differs.
 
 
 # ── plot_stage_ladder ──────────────────────────────────────────────────────────
@@ -22,18 +22,23 @@
 #' question is "where does the time go" — this puts stage on the y-axis (first
 #' stage at the top) and draws one horizontal segment per stage, with thin
 #' grey connectors forming a staircase as the case walks down-and-right like a
-#' Gantt chart. It reuses the same box derivation [plot_patient_journey()]
+#' Gantt chart. It reuses the same box derivation [plot_case_timeline()]
 #' uses; only the rendering differs.
 #'
 #' @param data A data frame or tibble containing the event log.
-#' @param case_id The single case identifier to visualise.
-#' @param stage_categories Character vector of `act_type` value(s) marking a
-#'   stage entry (the direct analogue of `location_categories`).
+#' @param state_events Character vector of `act_type` value(s) marking a
+#'   stage entry. Required — no default; see [plot_case_timeline()] for the
+#'   discovery-error behaviour when omitted.
+#' @param case_id The single case identifier to visualise, or `NULL` — see
+#'   [plot_case_timeline()] for the resolution rules.
 #' @param stage_order Character vector pinning the vertical stage order, or
 #'   `NULL` (default) to use first-appearance order. Every stage present in
 #'   the data must appear in `stage_order` if supplied.
-#' @param time_col,act_type_col,activity_col,case_col,patient_col Column-name
-#'   mappings, as in [plot_patient_journey()].
+#' @param time_col,act_type_col,activity_col,case_col Column-name mappings,
+#'   as in [plot_case_timeline()]. `case_col` may be `NULL` for a single
+#'   unnamed series (`case_id` must then also be `NULL`).
+#' @param schema An [event_log_schema()] object, the literal string
+#'   `"auto"`, or `NULL` — see [plot_case_timeline()].
 #' @param tz Timezone used when parsing character timestamps.
 #' @param terminal_activities Character vector of terminal `activity` values.
 #' @param stage_targets Named numeric vector mapping a stage name to its
@@ -48,11 +53,11 @@
 #'   segment's midpoint.
 #' @param palette_style Auto-palette style: `"okabe"` (default) or
 #'   `"brewer"`.
-#' @param location_palette Named character vector (stage -> hex colour)
+#' @param state_palette Named character vector (stage -> hex colour)
 #'   overriding the automatic palette, or `NULL`.
 #' @param tail_strategy Strategy for inferring the final stage's end time.
-#' @param title Plot title; `NULL` auto-generates one from `case_id` /
-#'   `patient_col`.
+#' @param title Plot title; `NULL` auto-generates `"Case <case_id>"` unless
+#'   `case_col = NULL`.
 #' @param return_data Logical; if `TRUE`, return `list(plot, boxes)` instead
 #'   of just the plot.
 #'
@@ -61,20 +66,22 @@
 #' @examples
 #' plot_stage_ladder(
 #'   complaint_example, case_id = "CMP-01",
-#'   stage_categories = "stage_change", case_col = "complaint_id"
+#'   state_events = "stage_change", case_col = "complaint_id"
 #' )
 #'
 #' @export
 plot_stage_ladder <- function(
-    data, case_id,
-    stage_categories,
+    data,
+    state_events,
+    case_id     = NULL,
     stage_order = NULL,
 
     time_col     = "timestamp",
     act_type_col = "act_type",
     activity_col = "activity",
-    case_col     = "caseID",
-    patient_col  = NULL,
+    case_col     = "case_id",
+
+    schema = NULL,
 
     tz = "UTC",
     terminal_activities = NULL,
@@ -82,34 +89,48 @@ plot_stage_ladder <- function(
 
     show_duration = TRUE,
 
-    palette_style    = c("okabe", "brewer"),
-    location_palette = NULL,
-    tail_strategy    = "last_event",
-    title            = NULL,
-    return_data      = FALSE
+    palette_style = c("okabe", "brewer"),
+    state_palette = NULL,
+    tail_strategy = "last_event",
+    title         = NULL,
+    return_data   = FALSE
 ) {
 
   palette_style <- match.arg(palette_style)
+
+  resolved <- resolve_entry_args(
+    data, schema,
+    state_events, missing(state_events),
+    time_col,     missing(time_col),
+    case_col,     missing(case_col),
+    act_type_col, missing(act_type_col),
+    activity_col, missing(activity_col)
+  )
+  state_events <- resolved$state_events
+  time_col     <- resolved$time_col
+  case_col     <- resolved$case_col
+  act_type_col <- resolved$act_type_col
+  activity_col <- resolved$activity_col
 
   cols <- list(
     time     = time_col,
     act_type = act_type_col,
     activity = activity_col,
     case     = case_col,
-    patient  = patient_col,
     lane     = NULL
   )
 
   # ── Validate + derive stage boxes through the shared pipeline ──────────────
-  spell <- validate_event_log(data, cols, case_id, stage_categories, tz = tz)
+  case_data <- validate_event_log(data, cols, case_id, state_events, tz = tz)
+  case_id   <- attr(case_data, "case_id")
 
-  boxes <- derive_location_boxes(
-    spell, cols, stage_categories,
+  boxes <- derive_state_boxes(
+    case_data, cols, state_events,
     box_height          = 1,   # irrelevant: ladder overrides y with stage rank
     tail_strategy       = tail_strategy,
     terminal_activities = terminal_activities
   )
-  boxes <- dplyr::rename(boxes, stage = location)
+  boxes <- dplyr::rename(boxes, stage = state)
 
   # ── Resolve the vertical stage ordering ────────────────────────────────────
   present <- unique(boxes$stage)
@@ -133,18 +154,14 @@ plot_stage_ladder <- function(
   boxes$y          <- n_stages - boxes$stage_rank + 1
 
   # ── Colours: one hue per stage (shared by segments and points) ─────────────
-  stage_colours <- location_palette %||%
-    journey_palette(stage_levels, "location", palette_style)
+  stage_colours <- state_palette %||%
+    journey_palette(stage_levels, "state", palette_style)
 
   seg_boxes  <- dplyr::filter(boxes, !terminal)
   term_boxes <- dplyr::filter(boxes, terminal)
 
-  if (is.null(title)) {
-    title <- if (is.null(cols$patient)) {
-      paste0("Case ", case_id)
-    } else {
-      paste0("Patient ", spell[[cols$patient]][1], " \u2014 Spell ", case_id)
-    }
+  if (is.null(title) && !is.null(cols$case)) {
+    title <- paste0("Case ", case_id)
   }
 
   # ── Base plot ──────────────────────────────────────────────────────────────
@@ -233,7 +250,7 @@ plot_stage_ladder <- function(
       # median/fixed-imputed end never inflates it.
       end_proven <- rows$xmax
       if (any(rows$end_inferred)) {
-        last_observed <- max(spell[[cols$time]])
+        last_observed <- max(case_data[[cols$time]])
         end_proven[rows$end_inferred] <-
           pmin(rows$xmax[rows$end_inferred], last_observed)
       }
@@ -319,7 +336,7 @@ plot_stage_ladder <- function(
       expand = ggplot2::expansion(mult = c(0.08, 0.12))
     ) +
     ggplot2::scale_colour_manual(values = stage_colours, guide = "none") +
-    theme_journey(base_size = 11) +
+    theme_timeline(base_size = 11) +
     ggplot2::theme(
       axis.title.y = ggplot2::element_blank(),
       axis.text.y  = ggplot2::element_text(size = 9, colour = "grey20"),

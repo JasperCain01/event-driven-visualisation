@@ -8,7 +8,7 @@
 # opts$interactive is TRUE. This keeps the static output path (opts$interactive
 # unset/FALSE) byte-identical to the pre-Stage-7 baselines.
 #
-# ggiraph is a Suggests-only dependency; plot_patient_journey() guards with
+# ggiraph is a Suggests-only dependency; plot_case_timeline() guards with
 # requireNamespace() before calling this function, mirroring the
 # patchwork/RColorBrewer idiom used elsewhere in the package.
 

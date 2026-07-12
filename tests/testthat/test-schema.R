@@ -1,5 +1,5 @@
 # test-schema.R — Tests for event_log_schema() / autodetect_schema() and
-# their wiring into plot_patient_journey().
+# their wiring into plot_case_timeline().
 #
 # Run with: testthat::test_file("tests/testthat/test-schema.R")
 
@@ -15,18 +15,18 @@ test_that("event_log_schema() constructs a classed list with the given fields", 
   expect_equal(s$time_col, "ts")
   expect_equal(s$case_col, "case_id")
   expect_null(s$act_type_col)
-  expect_null(s$patient_col)
+  expect_null(s$state_events)
 })
 
 test_that("print.event_log_schema() reports every field", {
-  s <- event_log_schema(time_col = "ts", location_categories = c("move"))
+  s <- event_log_schema(time_col = "ts", state_events = c("move"))
   # cli writes straight to the console rather than through a connection
   # capture.output() can intercept; cli_fmt() is the documented way to
   # capture cli-rendered text programmatically.
   txt <- paste(cli::cli_fmt(print(s)), collapse = "\n")
   expect_match(txt, "time_col")
   expect_match(txt, "ts")
-  expect_match(txt, "location_categories")
+  expect_match(txt, "state_events")
   expect_match(txt, "<not set>")   # act_type_col etc. are unset
 })
 
@@ -37,14 +37,12 @@ test_that("autodetect_schema() resolves exact-match columns", {
   expect_equal(s$time_col, "timestamp")
   expect_equal(s$act_type_col, "act_type")
   expect_equal(s$activity_col, "activity")
-  expect_equal(tolower(s$case_col), "caseid")
-  expect_equal(tolower(s$patient_col), "k_number")
+  expect_equal(tolower(s$case_col), "case_id")
 })
 
 test_that("autodetect_schema() recovers renamed (typo'd) columns via fuzzy match", {
   renamed <- example_journey |>
-    dplyr::rename(case_idx = caseID, act_typ = act_type, activty = activity,
-                  K_Numbr = K_Number)
+    dplyr::rename(case_idx = case_id, act_typ = act_type, activty = activity)
 
   msgs <- capture_messages(s <- autodetect_schema(renamed))
 
@@ -52,15 +50,14 @@ test_that("autodetect_schema() recovers renamed (typo'd) columns via fuzzy match
   expect_equal(s$case_col, "case_idx")      # fuzzy: adist("case_idx","case_id") == 1
   expect_equal(s$act_type_col, "act_typ")   # fuzzy: adist("act_typ","act_type") == 1
   expect_equal(s$activity_col, "activty")   # fuzzy: adist("activty","activity") == 1
-  expect_equal(s$patient_col, "K_Numbr")    # fuzzy: adist("K_Numbr","k_number") == 1
 
   expect_true(any(grepl("fuzzy match", msgs)))
   expect_true(any(grepl("exact match", msgs)))
 })
 
-test_that("location_categories is a pure passthrough", {
-  s <- suppressMessages(autodetect_schema(example_journey, location_categories = c("a", "b")))
-  expect_equal(s$location_categories, c("a", "b"))
+test_that("state_events is a pure passthrough", {
+  s <- suppressMessages(autodetect_schema(example_journey, state_events = c("a", "b")))
+  expect_equal(s$state_events, c("a", "b"))
 })
 
 # ── autodetect_schema(): ties abort ──────────────────────────────────────────
@@ -109,10 +106,13 @@ test_that("a column claimed by an earlier role is not reconsidered by a later ro
   expect_match(conditionMessage(err), "activity_col")
 })
 
-# ── Wiring into plot_patient_journey(): schema = "auto" ──────────────────────
+# ── Wiring into plot_case_timeline(): schema = "auto" ────────────────────────
 
 test_that("schema = \"auto\" autodetects and renders successfully", {
-  p <- suppressMessages(plot_patient_journey(example_journey, case_id = "SP-001", schema = "auto"))
+  p <- suppressMessages(plot_case_timeline(
+    example_journey, case_id = "SP-001", schema = "auto",
+    state_events = c("location_move", "ed_location_move")
+  ))
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
@@ -121,10 +121,12 @@ test_that("schema is never autodetected unless the literal sentinel \"auto\" is 
   # Passing an event_log_schema() object must not trigger autodetection —
   # only unresolved fields are used, and only the ones explicitly present.
   s <- event_log_schema(time_col = "timestamp", act_type_col = "act_type",
-                        activity_col = "activity", case_col = "caseID",
-                        patient_col = "K_Number")
+                        activity_col = "activity", case_col = "case_id")
   expect_no_error(
-    suppressMessages(plot_patient_journey(example_journey, case_id = "SP-001", schema = s))
+    suppressMessages(plot_case_timeline(
+      example_journey, case_id = "SP-001", schema = s,
+      state_events = c("location_move", "ed_location_move")
+    ))
   )
 })
 
@@ -150,9 +152,9 @@ test_that("an explicit individual argument beats the schema", {
   schema <- event_log_schema(act_type_col = "does_not_exist")
 
   expect_no_error(
-    plot_patient_journey(
+    plot_case_timeline(
       data, case_id = "C1", schema = schema, act_type_col = "act_type",
-      case_col = "case_id", time_col = "ts", patient_col = NULL
+      case_col = "case_id", time_col = "ts", state_events = "location_move"
     )
   )
 })
@@ -161,9 +163,9 @@ test_that("an omitted argument falls through to the schema field", {
   data   <- make_precedence_fixture()
   schema <- event_log_schema(time_col = "mytime")
 
-  result <- plot_patient_journey(
+  result <- plot_case_timeline(
     data, case_id = "C1", schema = schema,
-    case_col = "case_id", act_type_col = "act_type", patient_col = NULL,
+    case_col = "case_id", act_type_col = "act_type", state_events = "location_move",
     return_data = TRUE
   )
   # time_col was omitted, so the schema's "mytime" column must have been
@@ -173,13 +175,13 @@ test_that("an omitted argument falls through to the schema field", {
   expect_equal(min(result$boxes$xmin), as.POSIXct("2024-06-01 08:00:00", tz = "UTC"))
 })
 
-test_that("patient_col = NULL explicitly requested is honoured even with a schema present", {
+test_that("state_events omitted falls through to the schema field", {
   data   <- make_precedence_fixture()
-  schema <- event_log_schema(patient_col = "does_not_exist", time_col = "ts")
+  schema <- event_log_schema(state_events = "location_move")
 
   expect_no_error(
-    plot_patient_journey(
-      data, case_id = "C1", schema = schema, patient_col = NULL,
+    plot_case_timeline(
+      data, case_id = "C1", schema = schema, time_col = "ts",
       case_col = "case_id", act_type_col = "act_type"
     )
   )
@@ -187,8 +189,9 @@ test_that("patient_col = NULL explicitly requested is honoured even with a schem
 
 # ── Earlier suites pass untouched with no schema argument ───────────────────
 
-test_that("plot_patient_journey() works exactly as before with no schema argument", {
-  p <- plot_patient_journey(example_journey, case_id = "SP-001")
+test_that("plot_case_timeline() works exactly as before with no schema argument", {
+  p <- plot_case_timeline(example_journey, case_id = "SP-001",
+                          state_events = c("location_move", "ed_location_move"))
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })

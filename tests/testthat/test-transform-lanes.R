@@ -22,17 +22,15 @@ cols_base <- list(
   time     = "timestamp",
   act_type = "act_type",
   activity = "activity",
-  case     = "caseID",
-  patient  = "K_Number"
+  case     = "case_id"
 )
 cols_lane <- c(cols_base, list(lane = "lane"))
 
-# One ED location box; four point events across three lanes.
+# One ED state box; four point events across three lanes.
 # First-appearance lane order: Nursing, Medical, Diagnostics.
 lane_log <- function() {
   tibble::tibble(
-    caseID    = "SP-001",
-    K_Number  = "K001",
+    case_id   = "SP-001",
     timestamp = c(hrs(0), hrs(1), hrs(2), hrs(3), hrs(4)),
     act_type  = c("ed_location_move", "obs", "clerk_review",
                   "test_ordered", "obs"),
@@ -45,7 +43,7 @@ lane_log <- function() {
 
 test_that("lane y positions match the hand-computed band centres", {
   log   <- lane_log()
-  boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   # base = 1.3, lane_gap = 0.05, lane_height = 1.
@@ -63,7 +61,7 @@ test_that("lane y positions match the hand-computed band centres", {
 
 test_that("lane column is stored as a factor in first-appearance order", {
   log   <- lane_log()
-  boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   expect_true(is.factor(evts$lane))
@@ -76,7 +74,7 @@ test_that("a factor lane column pins an explicit lane ordering", {
   log$lane <- factor(log$lane,
                      levels = c("Diagnostics", "Medical", "Nursing"))
 
-  boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   # Diagnostics is now lane 1 -> 1.85, Nursing lane 3 -> 3.95.
@@ -88,7 +86,7 @@ test_that("a factor lane column pins an explicit lane ordering", {
 
 test_that("lane_gap and lane_height feed straight into the arithmetic", {
   log   <- lane_log()
-  boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats,
                                box_height = 1, lane_height = 2, lane_gap = 0.1)$events
 
@@ -103,7 +101,7 @@ test_that("lane_gap and lane_height feed straight into the arithmetic", {
 
 test_that("lane_col = NULL keeps every event on the box midline", {
   log   <- lane_log()
-  boxes <- derive_location_boxes(log, cols_base, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_base, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_base, loc_cats, box_height = 1)$events
 
   expect_true(all(evts$y == 0.5))          # box_height / 2
@@ -111,16 +109,15 @@ test_that("lane_col = NULL keeps every event on the box midline", {
 })
 
 test_that("empty point-event set still returns a lane column when lanes active", {
-  # Location moves only — no point events.
+  # State events only — no point events.
   log <- tibble::tibble(
-    caseID    = "SP-001",
-    K_Number  = "K001",
+    case_id   = "SP-001",
     timestamp = c(hrs(0), hrs(2)),
     act_type  = c("ed_location_move", "location_move"),
     activity  = c("ED", "Ward"),
     lane      = c("Nursing", "Nursing")
   )
-  boxes <- derive_location_boxes(log, cols_lane, loc_cats, box_height = 1)
+  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
   evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
 
   expect_equal(nrow(evts), 0L)
@@ -131,8 +128,7 @@ test_that("empty point-event set still returns a lane column when lanes active",
 
 plot_lane_log <- function() {
   tibble::tibble(
-    caseID    = "SP-001",
-    K_Number  = "K001",
+    case_id   = "SP-001",
     timestamp = c(hrs(0), hrs(0.5), hrs(1), hrs(1.5), hrs(4), hrs(4.5), hrs(6)),
     act_type  = c("ed_location_move", "obs", "clerk_review", "test_ordered",
                   "location_move", "obs", "clerk_review"),
@@ -146,14 +142,14 @@ plot_lane_log <- function() {
 # ── Conditional y-axis visibility ───────────────────────────────────────────────
 
 test_that("y-axis text/ticks stay blank without lanes", {
-  p <- plot_patient_journey(plot_lane_log(), case_id = "SP-001")
+  p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats)
   expect_true(inherits(p$theme$axis.text.y,  "element_blank"))
   expect_true(inherits(p$theme$axis.ticks.y, "element_blank"))
 })
 
 test_that("y-axis text/ticks become visible with lanes", {
-  p <- plot_patient_journey(plot_lane_log(), case_id = "SP-001",
-                            lane_col = "lane")
+  p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
+                          lane_col = "lane")
   expect_false(inherits(p$theme$axis.text.y,  "element_blank"))
   expect_false(inherits(p$theme$axis.ticks.y, "element_blank"))
   expect_true(inherits(p$theme$axis.text.y, "element_text"))
@@ -162,15 +158,15 @@ test_that("y-axis text/ticks become visible with lanes", {
 # ── Universal render gate ───────────────────────────────────────────────────────
 
 test_that("lanes render cleanly (universal gate)", {
-  p <- plot_patient_journey(plot_lane_log(), case_id = "SP-001",
-                            lane_col = "lane")
+  p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
+                          lane_col = "lane")
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 test_that("lanes + duration labels + reference lines render together (gate)", {
-  p <- plot_patient_journey(
-    plot_lane_log(), case_id = "SP-001",
+  p <- plot_case_timeline(
+    plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
     lane_col        = "lane",
     show_duration   = TRUE,
     reference_lines = data.frame(offset_hours = 4, label = "4h target")
@@ -183,8 +179,8 @@ test_that("lanes + duration labels + reference lines render together (gate)", {
 
 test_that("an unknown lane_col aborts with a helpful message", {
   expect_error(
-    plot_patient_journey(plot_lane_log(), case_id = "SP-001",
-                         lane_col = "laen"),
+    plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
+                       lane_col = "laen"),
     regexp = "lane_col"
   )
 })

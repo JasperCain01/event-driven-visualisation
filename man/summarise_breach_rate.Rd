@@ -7,14 +7,14 @@
 summarise_breach_rate(
   data,
   target_hours,
-  scope = "spell",
+  scope = "case",
   case_ids = NULL,
-  location_categories = c("location_move", "ed_location_move"),
+  state_events,
   time_col = "timestamp",
   act_type_col = "act_type",
   activity_col = "activity",
-  case_col = "caseID",
-  patient_col = NULL,
+  case_col = "case_id",
+  schema = NULL,
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
@@ -28,21 +28,26 @@ cohort.}
 
 \item{target_hours}{Single numeric target, in hours.}
 
-\item{scope}{Either `"spell"` (whole-spell elapsed time: first location
-move to last recorded event — both endpoints are real timestamps, so
-`include_inferred` is a no-op) or the name of a location present in the
-cohort (dwell within that one stage, e.g. the ED 4-hour standard). A
-case that never visited the stage contributes no row. An unknown scope
-name aborts with a did-you-mean hint.}
+\item{scope}{Either `"case"` (whole-case elapsed time: first state event
+to last recorded event — both endpoints are real timestamps, so
+`include_inferred` is a no-op) or the name of a state present in the
+cohort (dwell within that one state, e.g. a 4-hour standard). A case
+that never visited the state contributes no row. An unknown scope name
+aborts with a did-you-mean hint.}
 
 \item{case_ids}{Character vector of cases to include, or `NULL` (default)
 for every case in `data`.}
 
-\item{location_categories}{Character vector of `act_type` values that mark
-a location/state move.}
+\item{state_events}{Character vector of `act_type` values that open a
+state. Required — no default; see [plot_case_timeline()] for the
+discovery-error behaviour when omitted.}
 
-\item{time_col, act_type_col, activity_col, case_col, patient_col}{Column-name
-mappings, as in [plot_patient_journey()].}
+\item{time_col, act_type_col, activity_col, case_col}{Column-name
+mappings, as in [plot_case_timeline()]. `case_col` is required (it
+cannot be `NULL` — a cohort needs a case column).}
+
+\item{schema}{An [event_log_schema()] object, the literal string
+`"auto"`, or `NULL` — see [plot_case_timeline()].}
 
 \item{tz}{Timezone used when parsing character timestamps.}
 
@@ -53,8 +58,8 @@ before summarising, or `NULL`.}
 
 \item{tail_strategy}{Strategy for inferring the final box's end time.}
 
-\item{include_inferred}{Logical; see [summarise_journey_durations()]. When
-`scope` is a location whose final stay is the imputed final box,
+\item{include_inferred}{Logical; see [summarise_case_durations()]. When
+`scope` is a state whose final stay is the imputed final box,
 `FALSE` (default) drops those cases and reports the count.}
 }
 \value{
@@ -67,9 +72,8 @@ What fraction of cases exceed `target_hours`?
 }
 \examples{
 summarise_breach_rate(
-  complaint_example, target_hours = 24 * 7, scope = "spell",
-  case_col = "complaint_id", location_categories = "stage_change",
-  patient_col = NULL
+  complaint_example, target_hours = 24 * 7, scope = "case",
+  case_col = "complaint_id", state_events = "stage_change"
 )
 
 }

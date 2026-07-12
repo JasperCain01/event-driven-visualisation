@@ -1,8 +1,8 @@
 #' eventviz: Event Log Visualisation
 #'
 #' A general-purpose package for visualising timestamped event logs as
-#' location-band timelines, staircase stage diagrams, cohort facets, and
-#' aggregate/statistical summaries. See [plot_patient_journey()] to get
+#' state-band timelines, staircase stage diagrams, cohort facets, and
+#' aggregate/statistical summaries. See [plot_case_timeline()] to get
 #' started.
 #'
 #' @keywords internal
@@ -17,14 +17,14 @@
 utils::globalVariables(c(
   ".env", ".gap", ".gap_span", ".orig_row", ".use",
   "act_type", "activity", "breached",
-  "case_id", "caseID", "complaint_id",
-  "day", "dur_lab", "dur_label", "duration", "duration_secs",
+  "case_end", "case_id", "case_start", "complaint_id",
+  "dur_lab", "dur_label", "duration", "duration_secs",
   "dwell_lab", "dwell_secs", "elapsed_hours", "end_inferred",
-  "forward", "from_location", "hour", "hours",
-  "label", "lane", "location",
+  "forward", "from_state", "hours",
+  "label", "lane", "state",
   "mean_dwell_secs", "mean_step", "n",
-  "spell_end", "spell_start", "stage", "step",
-  "terminal", "ticket_id", "timestamp", "to_location", "tooltip",
+  "stage", "step",
+  "terminal", "ticket_id", "timestamp", "to_state", "tooltip",
   "x", "x_mid", "xend", "xmax", "xmax_render", "xmin", "xmin_render",
   "y", "y_mid", "yend", "ymax", "ymin"
 ))

@@ -2,8 +2,8 @@
 #
 # Covers the third example dataset (support_ticket_example — non-healthcare,
 # proving the package leaves the NHS sector entirely), exercised end-to-end
-# through all three plotting functions, the still-open ticket's ongoing-spell
-# indication, and theme_journey() extraction regression checks (both
+# through all three plotting functions, the still-open ticket's ongoing-case
+# indication, and theme_timeline() extraction regression checks (both
 # renderers' final themes carry the shared base plus their own additions).
 #
 # Run with: testthat::test_file("tests/testthat/test-support-ticket.R")
@@ -16,7 +16,7 @@ stages <- c("Open", "Assigned", "In Progress", "Waiting on Customer", "Resolved"
 
 # ── Dataset sanity ───────────────────────────────────────────────────────────────
 
-test_that("support_ticket_example has the expected shape and no patient column", {
+test_that("support_ticket_example has the expected shape and no case-secondary column", {
   expect_true(is.data.frame(support_ticket_example))
   expect_setequal(
     names(support_ticket_example),
@@ -30,23 +30,23 @@ test_that("support_ticket_example has the expected shape and no patient column",
 # ── End-to-end: band layout ──────────────────────────────────────────────────────
 
 test_that("support_ticket_example renders in the band layout with state_label = Status", {
-  p <- suppressMessages(plot_patient_journey(
+  p <- suppressMessages(plot_case_timeline(
     support_ticket_example, case_id = "TCK-01",
-    location_categories = "status_change", case_col = "ticket_id",
-    patient_col = NULL, terminal_activities = "Closed", state_label = "Status"
+    state_events = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed", state_label = "Status"
   ))
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
   expect_equal(p$scales$get_scales("fill")$name, "Status")
 })
 
-test_that("the still-open ticket (TCK-04) triggers the ongoing-spell indication", {
-  res <- suppressMessages(plot_patient_journey(
+test_that("the still-open ticket (TCK-04) triggers the ongoing-case indication", {
+  res <- suppressMessages(plot_case_timeline(
     support_ticket_example, case_id = "TCK-04",
-    location_categories = "status_change", case_col = "ticket_id",
-    patient_col = NULL, terminal_activities = "Closed", return_data = TRUE
+    state_events = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed", return_data = TRUE
   ))
-  expect_true(attr(res$boxes, "spell_open"))
+  expect_true(attr(res$boxes, "case_open"))
 })
 
 # ── Visual regression baseline (vdiffr) ──────────────────────────────────────────
@@ -56,10 +56,10 @@ test_that("the still-open ticket (TCK-04) triggers the ongoing-spell indication"
 
 test_that("support_ticket_example band layout matches its baseline", {
   skip_if_not_installed("vdiffr")
-  p <- suppressMessages(plot_patient_journey(
+  p <- suppressMessages(plot_case_timeline(
     support_ticket_example, case_id = "TCK-01",
-    location_categories = "status_change", case_col = "ticket_id",
-    patient_col = NULL, terminal_activities = "Closed", state_label = "Status"
+    state_events = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed", state_label = "Status"
   ))
   vdiffr::expect_doppelganger("support-ticket-band", p)
 })
@@ -69,7 +69,7 @@ test_that("support_ticket_example band layout matches its baseline", {
 test_that("support_ticket_example renders in the staircase layout", {
   p <- suppressMessages(plot_stage_ladder(
     support_ticket_example, case_id = "TCK-03",
-    stage_categories = "status_change", case_col = "ticket_id",
+    state_events = "status_change", case_col = "ticket_id",
     terminal_activities = "Closed"
   ))
   expect_s3_class(p, "ggplot")
@@ -79,20 +79,20 @@ test_that("support_ticket_example renders in the staircase layout", {
 # ── End-to-end: cohort layout ────────────────────────────────────────────────────
 
 test_that("support_ticket_example renders in the cohort layout", {
-  p <- suppressMessages(plot_journey_cohort(
+  p <- suppressMessages(plot_cohort_timeline(
     support_ticket_example,
-    location_categories = "status_change", case_col = "ticket_id",
-    patient_col = NULL, terminal_activities = "Closed", state_label = "Status",
+    state_events = "status_change", case_col = "ticket_id",
+    terminal_activities = "Closed", state_label = "Status",
     case_ids = c("TCK-01", "TCK-02", "TCK-03", "TCK-05", "TCK-06")
   ))
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-# ── theme_journey() extraction: shared base + per-renderer additions ────────────
+# ── theme_timeline() extraction: shared base + per-renderer additions ───────────
 
-test_that("theme_journey() supplies the shared grid/title styling", {
-  th <- theme_journey(base_size = 11)
+test_that("theme_timeline() supplies the shared grid/title styling", {
+  th <- theme_timeline(base_size = 11)
   built <- ggplot2::calc_element("panel.grid.major.x", th)
   expect_equal(built$colour, "grey88")
   expect_equal(built$linewidth, 0.4)
@@ -102,9 +102,9 @@ test_that("theme_journey() supplies the shared grid/title styling", {
   expect_equal(title_el$size, 12)
 })
 
-test_that("the band renderer's final theme layers legend styling on theme_journey()", {
-  p <- suppressMessages(plot_patient_journey(support_ticket_example, case_id = "TCK-01",
-    location_categories = "status_change", case_col = "ticket_id", patient_col = NULL))
+test_that("the band renderer's final theme layers legend styling on theme_timeline()", {
+  p <- suppressMessages(plot_case_timeline(support_ticket_example, case_id = "TCK-01",
+    state_events = "status_change", case_col = "ticket_id"))
   expect_equal(p$theme$legend.position, "bottom")
   grid_x <- ggplot2::calc_element("panel.grid.major.x", p$theme)
   expect_equal(grid_x$colour, "grey88")
@@ -113,7 +113,7 @@ test_that("the band renderer's final theme layers legend styling on theme_journe
 test_that("the staircase renderer's final theme suppresses the colour legend and sets its own margin", {
   p <- suppressMessages(plot_stage_ladder(
     support_ticket_example, case_id = "TCK-01",
-    stage_categories = "status_change", case_col = "ticket_id"
+    state_events = "status_change", case_col = "ticket_id"
   ))
   expect_equal(p$scales$get_scales("colour")$guide, "none")
   expect_equal(p$theme$plot.margin, ggplot2::margin(8, 14, 8, 8))

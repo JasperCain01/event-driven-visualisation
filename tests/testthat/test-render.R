@@ -1,5 +1,5 @@
 # test-render.R — Tests for Stage 1 visual quick-win features.
-# Covers Stage 1a (duration labels), 1b (reference lines), 1c (ongoing-spell
+# Covers Stage 1a (duration labels), 1b (reference lines), 1c (ongoing-case
 # indication), 1d (direct box labelling), 1e (high-cardinality bucketing) and
 # 1f (colourblind-safe default palette), plus a combined all-features-on
 # render gate.
@@ -15,11 +15,12 @@ library(ggplot2)
 t0 <- as.POSIXct("2024-01-01 08:00:00", tz = "UTC")
 hrs <- function(h) t0 + h * 3600
 
+STATE_EVENTS <- c("ed_location_move", "location_move")
+
 small_log <- function() {
-  # Final location move is "Ward" — never reaches a terminal state.
+  # Final state move is "Ward" — never reaches a terminal state.
   tibble::tibble(
-    caseID    = "SP-001",
-    K_Number  = "K001",
+    case_id   = "SP-001",
     timestamp = c(hrs(0), hrs(1), hrs(2), hrs(4), hrs(5), hrs(8)),
     act_type  = c("ed_location_move", "obs", "clerk_review",
                   "location_move", "obs", "clerk_review"),
@@ -30,7 +31,7 @@ small_log <- function() {
 
 terminal_log <- function() {
   small_log() |>
-    dplyr::add_row(caseID = "SP-001", K_Number = "K001",
+    dplyr::add_row(case_id = "SP-001",
                    timestamp = hrs(9), act_type = "location_move",
                    activity = "Discharged")
 }
@@ -42,8 +43,7 @@ high_cardinality_log <- function() {
             "type_d", "type_e", "type_f", "type_g", "type_h")
   n <- length(types)
   tibble::tibble(
-    caseID    = "SP-001",
-    K_Number  = "K001",
+    case_id   = "SP-001",
     timestamp = c(hrs(0), hrs(seq_len(n))),
     act_type  = c("location_move", types),
     activity  = c("Ward", paste0("event ", seq_len(n)))
@@ -72,17 +72,18 @@ test_that("format_duration() is vectorised and NA-safe", {
 # ── 1a. show_duration layer toggling ──────────────────────────────────────────
 
 test_that("show_duration = FALSE (default) adds no duration-label layer", {
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
-  p_on  <- plot_patient_journey(small_log(), case_id = "SP-001", show_duration = TRUE)
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
+  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                              show_duration = TRUE)
 
   expect_equal(length(p_off$layers) + 1L, length(p_on$layers))
   expect_no_warning(ggplot2::ggplot_build(p_off))
 })
 
 test_that("show_duration = TRUE labels every non-terminal box, none for terminal", {
-  r <- plot_patient_journey(terminal_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged",
-                            show_duration = TRUE, return_data = TRUE)
+  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged",
+                          show_duration = TRUE, return_data = TRUE)
 
   n_non_terminal <- sum(!r$boxes$terminal)
 
@@ -97,9 +98,9 @@ test_that("show_duration = TRUE labels every non-terminal box, none for terminal
 
 test_that("end_inferred boxes get a '+' suffix; terminal boxes get no label", {
   # No terminal_activities supplied: the final box's end is inferred (no
-  # successor move event tells us when it ended).
-  r <- plot_patient_journey(small_log(), case_id = "SP-001",
-                            show_duration = TRUE, return_data = TRUE)
+  # successor state event tells us when it ended).
+  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          show_duration = TRUE, return_data = TRUE)
 
   expect_true(r$boxes$end_inferred[nrow(r$boxes)])
   expect_false(any(r$boxes$end_inferred[-nrow(r$boxes)]))
@@ -113,9 +114,9 @@ test_that("end_inferred boxes get a '+' suffix; terminal boxes get no label", {
   # Terminal boxes never get a duration label at all: with terminal_activities
   # supplied, the terminal row is dropped from `boxes` before the label layer
   # is built (render.R filters `terminal` out before the geom_text() layer).
-  rt <- plot_patient_journey(terminal_log(), case_id = "SP-001",
-                             terminal_activities = "Discharged",
-                             show_duration = TRUE, return_data = TRUE)
+  rt <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                           terminal_activities = "Discharged",
+                           show_duration = TRUE, return_data = TRUE)
   built <- ggplot2::ggplot_build(rt$plot)
   layer_classes <- vapply(rt$plot$layers, function(l) class(l$geom)[1], character(1))
   dur_layer_idx <- which(layer_classes == "GeomText")[1]
@@ -123,7 +124,8 @@ test_that("end_inferred boxes get a '+' suffix; terminal boxes get no label", {
 })
 
 test_that("universal render gate: show_duration = TRUE builds without warning", {
-  p <- plot_patient_journey(small_log(), case_id = "SP-001", show_duration = TRUE)
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          show_duration = TRUE)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
@@ -132,30 +134,30 @@ test_that("universal render gate: show_duration = TRUE builds without warning", 
 test_that("reference_lines = NULL (default) is accepted and adds no layer", {
   expect_no_error(validate_reference_lines(NULL))
 
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
   expect_no_warning(ggplot2::ggplot_build(p_off))
 })
 
 test_that("non-data-frame reference_lines aborts", {
   expect_error(
-    plot_patient_journey(small_log(), case_id = "SP-001",
-                         reference_lines = c(4)),
+    plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                       reference_lines = c(4)),
     regexp = "data frame"
   )
 })
 
 test_that("reference_lines missing required columns aborts naming them", {
   expect_error(
-    plot_patient_journey(small_log(), case_id = "SP-001",
-                         reference_lines = data.frame(hours = 4, lbl = "x")),
+    plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                       reference_lines = data.frame(hours = 4, lbl = "x")),
     regexp = "offset_hours"
   )
 })
 
 test_that("reference_lines with non-numeric offset_hours aborts", {
   expect_error(
-    plot_patient_journey(
-      small_log(), case_id = "SP-001",
+    plot_case_timeline(
+      small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
       reference_lines = data.frame(offset_hours = "4", label = "4h target")
     ),
     regexp = "numeric"
@@ -164,8 +166,8 @@ test_that("reference_lines with non-numeric offset_hours aborts", {
 
 test_that("empty reference_lines data frame aborts", {
   expect_error(
-    plot_patient_journey(
-      small_log(), case_id = "SP-001",
+    plot_case_timeline(
+      small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
       reference_lines = data.frame(offset_hours = numeric(0), label = character(0))
     ),
     regexp = "at least one row"
@@ -177,8 +179,9 @@ test_that("empty reference_lines data frame aborts", {
 test_that("reference_lines adds a vline + text layer, positioned from the first event", {
   ref <- data.frame(offset_hours = 4, label = "4h target")
 
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
-  p_on  <- plot_patient_journey(small_log(), case_id = "SP-001", reference_lines = ref)
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
+  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                              reference_lines = ref)
 
   expect_equal(length(p_off$layers) + 2L, length(p_on$layers))
 
@@ -193,7 +196,8 @@ test_that("reference_lines adds a vline + text layer, positioned from the first 
 
 test_that("multiple reference_lines each render their own vline + label", {
   ref <- data.frame(offset_hours = c(2, 4), label = c("2h", "4h"))
-  p <- plot_patient_journey(small_log(), case_id = "SP-001", reference_lines = ref)
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          reference_lines = ref)
 
   layer_classes <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
   vline_idx <- which(layer_classes == "GeomVline")[1]
@@ -203,32 +207,34 @@ test_that("multiple reference_lines each render their own vline + label", {
 
 test_that("universal render gate: reference_lines builds without warning", {
   ref <- data.frame(offset_hours = 4, label = "4h target")
-  p <- plot_patient_journey(small_log(), case_id = "SP-001", reference_lines = ref)
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          reference_lines = ref)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-# ── 1c. spell_open attribute ────────────────────────────────────────────────────
+# ── 1c. case_open attribute ────────────────────────────────────────────────────
 
-test_that("spell_open is FALSE when terminal_activities is NULL (default)", {
-  r <- plot_patient_journey(small_log(), case_id = "SP-001", return_data = TRUE)
-  expect_false(attr(r$boxes, "spell_open"))
+test_that("case_open is FALSE when terminal_activities is NULL (default)", {
+  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          return_data = TRUE)
+  expect_false(attr(r$boxes, "case_open"))
 })
 
-test_that("spell_open is TRUE when the final move is not in terminal_activities", {
-  r <- plot_patient_journey(small_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged",
-                            return_data = TRUE)
-  expect_true(attr(r$boxes, "spell_open"))
+test_that("case_open is TRUE when the final move is not in terminal_activities", {
+  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged",
+                          return_data = TRUE)
+  expect_true(attr(r$boxes, "case_open"))
 })
 
-test_that("spell_open is FALSE when the final move IS in terminal_activities", {
-  r <- plot_patient_journey(terminal_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged",
-                            return_data = TRUE)
-  expect_false(attr(r$boxes, "spell_open"))
+test_that("case_open is FALSE when the final move IS in terminal_activities", {
+  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged",
+                          return_data = TRUE)
+  expect_false(attr(r$boxes, "case_open"))
 })
 
-# ── 1c. ongoing-spell rendering ────────────────────────────────────────────────
+# ── 1c. ongoing-case rendering ────────────────────────────────────────────────
 
 has_ongoing_annotation <- function(p) {
   built <- ggplot2::ggplot_build(p)
@@ -237,26 +243,26 @@ has_ongoing_annotation <- function(p) {
   }, logical(1)))
 }
 
-test_that("spell_open = FALSE renders no '(ongoing)' annotation", {
-  p_default <- plot_patient_journey(small_log(), case_id = "SP-001")
-  p_reached <- plot_patient_journey(terminal_log(), case_id = "SP-001",
-                                    terminal_activities = "Discharged")
+test_that("case_open = FALSE renders no '(ongoing)' annotation", {
+  p_default <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
+  p_reached <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                                  terminal_activities = "Discharged")
   expect_false(has_ongoing_annotation(p_default))
   expect_false(has_ongoing_annotation(p_reached))
   expect_no_warning(ggplot2::ggplot_build(p_default))
   expect_no_warning(ggplot2::ggplot_build(p_reached))
 })
 
-test_that("spell_open = TRUE renders the '(ongoing)' annotation", {
-  p_on <- plot_patient_journey(small_log(), case_id = "SP-001",
-                               terminal_activities = "Discharged")
+test_that("case_open = TRUE renders the '(ongoing)' annotation", {
+  p_on <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                             terminal_activities = "Discharged")
   expect_true(has_ongoing_annotation(p_on))
 })
 
-test_that("spell_open = TRUE adds a dashed geom_segment + '(ongoing)' annotation", {
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
-  p_on  <- plot_patient_journey(small_log(), case_id = "SP-001",
-                                terminal_activities = "Discharged")
+test_that("case_open = TRUE adds a dashed geom_segment + '(ongoing)' annotation", {
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
+  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                              terminal_activities = "Discharged")
 
   # geom_segment + annotate("text") = 2 extra layers
   expect_equal(length(p_off$layers) + 2L, length(p_on$layers))
@@ -267,31 +273,32 @@ test_that("spell_open = TRUE adds a dashed geom_segment + '(ongoing)' annotation
   seg_idx <- which(layer_classes == "GeomSegment")[1]
   built   <- ggplot2::ggplot_build(p_on)
 
-  r <- plot_patient_journey(small_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged", return_data = TRUE)
+  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged", return_data = TRUE)
   last_box <- r$boxes[nrow(r$boxes), ]
   expect_equal(as.numeric(built$data[[seg_idx]]$x[1]), as.numeric(last_box$xmax))
 })
 
-test_that("universal render gate: spell_open = TRUE builds without warning", {
-  p <- plot_patient_journey(small_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged")
+test_that("universal render gate: case_open = TRUE builds without warning", {
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 # ── 1d. label_boxes layer toggling ─────────────────────────────────────────────
 
 test_that("label_boxes = FALSE (default) adds no box-label layer", {
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
-  p_on  <- plot_patient_journey(small_log(), case_id = "SP-001", label_boxes = TRUE)
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
+  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                              label_boxes = TRUE)
 
   expect_equal(length(p_off$layers) + 1L, length(p_on$layers))
   expect_no_warning(ggplot2::ggplot_build(p_off))
 })
 
-test_that("label_boxes = TRUE labels every non-terminal box with its location", {
-  r <- plot_patient_journey(small_log(), case_id = "SP-001",
-                            label_boxes = TRUE, return_data = TRUE)
+test_that("label_boxes = TRUE labels every non-terminal box with its state", {
+  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          label_boxes = TRUE, return_data = TRUE)
 
   layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
   label_layer_idx <- which(layer_classes == "GeomText")[1]
@@ -302,13 +309,13 @@ test_that("label_boxes = TRUE labels every non-terminal box with its location", 
 })
 
 test_that("label_boxes = TRUE excludes terminal boxes (they keep their own label)", {
-  r <- plot_patient_journey(terminal_log(), case_id = "SP-001",
-                            terminal_activities = "Discharged",
-                            label_boxes = TRUE, return_data = TRUE)
+  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          terminal_activities = "Discharged",
+                          label_boxes = TRUE, return_data = TRUE)
 
   layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
   # Two GeomText layers exist here: the terminal marker's direct label
-  # (Stage 0.5) and this stage's box-centre label. The box-centre layer must
+  # (Stage 0.5) and this state's box-centre label. The box-centre layer must
   # only cover the non-terminal boxes.
   label_layer_idxs <- which(layer_classes == "GeomText")
   built <- ggplot2::ggplot_build(r$plot)
@@ -320,7 +327,8 @@ test_that("label_boxes = TRUE excludes terminal boxes (they keep their own label
 })
 
 test_that("universal render gate: label_boxes = TRUE builds without warning", {
-  p <- plot_patient_journey(small_log(), case_id = "SP-001", label_boxes = TRUE)
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          label_boxes = TRUE)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
@@ -341,13 +349,13 @@ test_that("bucket_top_n() keeps the most frequent values and collapses the rest"
 # ── 1e. event_type_top_n wiring ─────────────────────────────────────────────────
 
 test_that("event_type_top_n = NULL (default) leaves act_type untouched", {
-  p_off <- plot_patient_journey(small_log(), case_id = "SP-001")
+  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
   expect_no_warning(ggplot2::ggplot_build(p_off))
 })
 
 test_that("event_type_top_n collapses the long tail into 'Other'", {
   expect_message(
-    r <- plot_patient_journey(high_cardinality_log(), case_id = "SP-001",
+    r <- plot_case_timeline(high_cardinality_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                          event_type_top_n = 3, return_data = TRUE),
     regexp = "Other"
   )
@@ -362,8 +370,8 @@ test_that("event_type_top_n collapses the long tail into 'Other'", {
 })
 
 test_that("event_type_top_n is a no-op when under the threshold", {
-  r <- plot_patient_journey(high_cardinality_log(), case_id = "SP-001",
-                            event_type_top_n = 20, return_data = TRUE)
+  r <- plot_case_timeline(high_cardinality_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          event_type_top_n = 20, return_data = TRUE)
 
   built <- ggplot2::ggplot_build(r$plot)
   layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
@@ -377,19 +385,19 @@ test_that("event_type_top_n is a no-op when under the threshold", {
 
 test_that("universal render gate: event_type_top_n builds without warning", {
   p <- suppressMessages(
-    plot_patient_journey(high_cardinality_log(), case_id = "SP-001",
-                         event_type_top_n = 3)
+    plot_case_timeline(high_cardinality_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                       event_type_top_n = 3)
   )
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 # ── 1f. journey_palette() — "okabe" style (new default) ────────────────────────
 
-test_that("okabe locations and events never share a hex for co-indexed levels", {
-  loc_cols <- journey_palette(c("A", "B", "C"), "location", "okabe")
-  evt_cols <- journey_palette(c("A", "B", "C"), "event", "okabe")
+test_that("okabe states and events never share a hex for co-indexed levels", {
+  state_cols <- journey_palette(c("A", "B", "C"), "state", "okabe")
+  evt_cols   <- journey_palette(c("A", "B", "C"), "event", "okabe")
 
-  expect_length(setdiff(unname(loc_cols), unname(evt_cols)), 3L)
+  expect_length(setdiff(unname(state_cols), unname(evt_cols)), 3L)
 })
 
 test_that("okabe events are the Okabe-Ito hues offset by 4 positions", {
@@ -398,17 +406,17 @@ test_that("okabe events are the Okabe-Ito hues offset by 4 positions", {
   expect_equal(unname(evt_cols), .okabe_ito[c(5, 6, 7)])
 })
 
-test_that("okabe locations are lightened toward white, not the raw saturated hue", {
-  loc_cols <- journey_palette(c("l1", "l2"), "location", "okabe")
-  expect_false(unname(loc_cols[1]) %in% .okabe_ito)
-  expect_true(all(grepl("^#[0-9A-Fa-f]{6,8}$", loc_cols)))
+test_that("okabe states are lightened toward white, not the raw saturated hue", {
+  state_cols <- journey_palette(c("l1", "l2"), "state", "okabe")
+  expect_false(unname(state_cols[1]) %in% .okabe_ito)
+  expect_true(all(grepl("^#[0-9A-Fa-f]{6,8}$", state_cols)))
 })
 
 test_that("okabe palette recycles past 8 distinct levels without erroring", {
   levs <- paste0("L", 1:10)
-  expect_no_error(loc_cols <- journey_palette(levs, "location", "okabe"))
+  expect_no_error(state_cols <- journey_palette(levs, "state", "okabe"))
   expect_no_error(evt_cols <- journey_palette(levs, "event", "okabe"))
-  expect_length(loc_cols, 10L)
+  expect_length(state_cols, 10L)
   expect_length(evt_cols, 10L)
 })
 
@@ -425,16 +433,16 @@ test_that("brewer style reproduces the prior Set2/Dark2 output exactly", {
   skip_if_not_installed("RColorBrewer")
 
   levs <- c("A", "B", "C")
-  loc_cols <- journey_palette(levs, "location", "brewer")
-  evt_cols <- journey_palette(levs, "event", "brewer")
+  state_cols <- journey_palette(levs, "state", "brewer")
+  evt_cols   <- journey_palette(levs, "event", "brewer")
 
-  expect_equal(unname(loc_cols), RColorBrewer::brewer.pal(3, "Set2"))
+  expect_equal(unname(state_cols), RColorBrewer::brewer.pal(3, "Set2"))
   expect_equal(unname(evt_cols), RColorBrewer::brewer.pal(3, "Dark2"))
 })
 
 test_that("invalid palette_style aborts with a clear match.arg error", {
   expect_error(
-    journey_palette(c("A", "B"), "location", "viridis"),
+    journey_palette(c("A", "B"), "state", "viridis"),
     regexp = "should be one of"
   )
 })
@@ -442,12 +450,13 @@ test_that("invalid palette_style aborts with a clear match.arg error", {
 # ── 1f. end-to-end rendering ────────────────────────────────────────────────────
 
 test_that("default (okabe) render builds without warning", {
-  p <- plot_patient_journey(small_log(), case_id = "SP-001")
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 test_that("palette_style = 'brewer' render builds without warning", {
-  p <- plot_patient_journey(small_log(), case_id = "SP-001", palette_style = "brewer")
+  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                          palette_style = "brewer")
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
@@ -460,9 +469,9 @@ test_that("universal render gate: ALL Stage 1 features on at once builds cleanly
   ref <- data.frame(offset_hours = c(2, 6), label = c("2h target", "6h target"))
 
   p <- suppressMessages(
-    plot_patient_journey(
-      high_cardinality_log(), case_id = "SP-001",
-      terminal_activities = "Discharged",   # final move is "Ward" → spell open
+    plot_case_timeline(
+      high_cardinality_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+      terminal_activities = "Discharged",   # final move is "Ward" → case open
       show_duration       = TRUE,
       label_boxes         = TRUE,
       reference_lines     = ref,

@@ -2,17 +2,17 @@
 % Please edit documentation in R/aggregate.R
 \name{summarise_transitions}
 \alias{summarise_transitions}
-\title{Summarise directed location-to-location transitions across a cohort}
+\title{Summarise directed state-to-state transitions across a cohort}
 \usage{
 summarise_transitions(
   data,
+  state_events,
   case_ids = NULL,
-  location_categories = c("location_move", "ed_location_move"),
   time_col = "timestamp",
   act_type_col = "act_type",
   activity_col = "activity",
-  case_col = "caseID",
-  patient_col = NULL,
+  case_col = "case_id",
+  schema = NULL,
   tz = "UTC",
   terminal_activities = NULL,
   exclude_categories = NULL,
@@ -24,14 +24,19 @@ summarise_transitions(
 \item{data}{A data frame or tibble containing the event log for the whole
 cohort.}
 
+\item{state_events}{Character vector of `act_type` values that open a
+state. Required — no default; see [plot_case_timeline()] for the
+discovery-error behaviour when omitted.}
+
 \item{case_ids}{Character vector of cases to include, or `NULL` (default)
 for every case in `data`.}
 
-\item{location_categories}{Character vector of `act_type` values that mark
-a location/state move.}
+\item{time_col, act_type_col, activity_col, case_col}{Column-name
+mappings, as in [plot_case_timeline()]. `case_col` is required (it
+cannot be `NULL` — a cohort needs a case column).}
 
-\item{time_col, act_type_col, activity_col, case_col, patient_col}{Column-name
-mappings, as in [plot_patient_journey()].}
+\item{schema}{An [event_log_schema()] object, the literal string
+`"auto"`, or `NULL` — see [plot_case_timeline()].}
 
 \item{tz}{Timezone used when parsing character timestamps.}
 
@@ -48,7 +53,7 @@ final-stay rows and records how many were removed in
 `end_inferred` column still flags the imputed ones).}
 }
 \value{
-A tibble (`from_location`, `to_location`, `n`, `mean_dwell_secs`,
+A tibble (`from_state`, `to_state`, `n`, `mean_dwell_secs`,
   `median_dwell_secs`), one row per distinct ordered pair, sorted by
   descending `n`.
 }
@@ -63,7 +68,7 @@ excludes anything here).
 \examples{
 summarise_transitions(
   complaint_example, case_col = "complaint_id",
-  location_categories = "stage_change", patient_col = NULL
+  state_events = "stage_change"
 )
 
 }
