@@ -117,19 +117,6 @@ test_that("schema = \"auto\" autodetects and renders successfully", {
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-test_that("schema is never autodetected unless the literal sentinel \"auto\" is used", {
-  # Passing an event_log_schema() object must not trigger autodetection —
-  # only unresolved fields are used, and only the ones explicitly present.
-  s <- event_log_schema(time_col = "timestamp", act_type_col = "act_type",
-                        activity_col = "activity", case_col = "case_id")
-  expect_no_error(
-    suppressMessages(plot_case_timeline(
-      example_journey, case_id = "SP-001", schema = s,
-      state_events = c("location_move", "ed_location_move")
-    ))
-  )
-})
-
 # ── Per-field precedence ──────────────────────────────────────────────────────
 
 make_precedence_fixture <- function() {
@@ -168,6 +155,8 @@ test_that("an omitted argument falls through to the schema field", {
     case_col = "case_id", act_type_col = "act_type", state_events = "location_move",
     return_data = TRUE
   )
+  # This is also the proof that a schema object is never autodetected: with
+  # autodetection, "ts" (an exact candidate name) would have won over "mytime".
   # time_col was omitted, so the schema's "mytime" column must have been
   # used, not the hardcoded default "timestamp" (which doesn't even exist
   # in this fixture — using it would have aborted) nor the fixture's other
@@ -187,11 +176,4 @@ test_that("state_events omitted falls through to the schema field", {
   )
 })
 
-# ── Earlier suites pass untouched with no schema argument ───────────────────
 
-test_that("plot_case_timeline() works exactly as before with no schema argument", {
-  p <- plot_case_timeline(example_journey, case_id = "SP-001",
-                          state_events = c("location_move", "ed_location_move"))
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
