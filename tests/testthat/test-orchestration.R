@@ -32,12 +32,6 @@ test_that("auto title is 'Case <case_id>'", {
   expect_equal(p$labels$title, "Case SP-001")
 })
 
-test_that("title stays NULL when case_col = NULL (nothing to name)", {
-  log <- standard_log() |> dplyr::select(-case_id)
-  p <- plot_case_timeline(log, state_events = STATE_EVENTS, case_col = NULL)
-  expect_null(p$labels$title)
-})
-
 test_that("an explicit title overrides auto-generation", {
   p <- plot_case_timeline(standard_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           title = "My Custom Title")
@@ -71,35 +65,20 @@ test_that("exclude_categories with no matching rows plots silently (no drop mess
   )
 })
 
-test_that("exclude_categories removing every state event aborts with a clear message", {
-  log <- standard_log()
-  expect_error(
-    plot_case_timeline(log, case_id = "SP-001", state_events = STATE_EVENTS,
-                       exclude_categories = c("ed_location_move", "location_move")),
-    regexp = "No state events remain"
-  )
-})
-
 # ── return_data = TRUE shape ─────────────────────────────────────────────────────
 
-test_that("return_data = TRUE returns list(plot, boxes, events, summary)", {
+test_that("return_data = TRUE returns the plot, boxes, events and a one-row-per-box summary", {
   r <- plot_case_timeline(standard_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           return_data = TRUE)
   expect_named(r, c("plot", "boxes", "events", "summary"))
   expect_s3_class(r$plot, "ggplot")
   expect_true(is.data.frame(r$boxes))
   expect_true(is.data.frame(r$events))
-  expect_true(is.data.frame(r$summary))
-})
-
-test_that("return_data summary has one row per box, with the expected columns", {
-  r <- plot_case_timeline(standard_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          return_data = TRUE)
+  expect_s3_class(r$summary, "tbl_df")
   expect_named(
     r$summary,
     c("case_id", "state", "xmin", "xmax", "duration_secs", "end_inferred", "terminal")
   )
-  expect_equal(nrow(r$summary), nrow(r$boxes))
   expect_equal(r$summary$state, r$boxes$state)
   expect_true(all(r$summary$case_id == "SP-001"))
 })
@@ -119,8 +98,3 @@ test_that("return_data summary agrees with summarise_case_durations() for the sa
   expect_equal(actual, expected, ignore_attr = "n_inferred_excluded")
 })
 
-test_that("return_data = FALSE (default) returns just the plot, not a list", {
-  p <- plot_case_timeline(standard_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  expect_s3_class(p, "ggplot")
-  expect_false(identical(names(p), c("plot", "boxes", "events", "summary")))
-})

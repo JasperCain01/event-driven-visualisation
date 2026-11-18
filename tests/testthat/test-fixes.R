@@ -49,11 +49,6 @@ test_that("show_labels = TRUE renders without dropping label rows", {
   expect_true(4L %in% layer_rows)
 })
 
-test_that("default plot (labels off) also builds without warnings", {
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
 # ── Defect 2: terminal state was extended into a fake stay ────────────────────
 
 test_that("terminal_activities gives the final move zero duration, not a median box", {
@@ -127,14 +122,11 @@ test_that("exclude_categories removing all state events aborts cleanly", {
 
 # ── Defect 5c: vector case_id crashed with "condition has length > 1" ─────────
 
-test_that("vector case_id aborts with a clear message", {
+test_that("a vector or NA case_id aborts with a clear message", {
   expect_error(
     plot_case_timeline(small_log(), case_id = c("SP-001", "SP-002"), state_events = STATE_EVENTS),
     regexp = "single"
   )
-})
-
-test_that("NA case_id aborts with a clear message", {
   expect_error(
     plot_case_timeline(small_log(), case_id = NA_character_, state_events = STATE_EVENTS),
     regexp = "single"
@@ -157,11 +149,4 @@ test_that("POSIXct input keeps its own tzone regardless of tz argument", {
   expect_equal(attr(r$boxes$xmin, "tzone"), "UTC")
 })
 
-# ── case_col = NULL support ─────────────────────────────────────────────────
 
-test_that("case_col = NULL works for a single unnamed series", {
-  log <- small_log() |> dplyr::select(-case_id)
-  p <- plot_case_timeline(log, state_events = STATE_EVENTS, case_col = NULL)
-  expect_s3_class(p, "ggplot")
-  expect_null(p$labels$title)
-})

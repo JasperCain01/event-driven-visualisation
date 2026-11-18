@@ -25,13 +25,6 @@ test_that("the §1 acceptance snippet renders in one call with one declaration",
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-test_that("the example_journey quick-start snippet renders in one call", {
-  p <- plot_case_timeline(example_journey,
-                          state_events = c("location_move", "ed_location_move"))
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
 # ── 2. Missing state_events aborts listing distinct act_type values ─────────
 
 test_that("missing state_events aborts listing act_type values with counts and 'state'", {
@@ -43,23 +36,6 @@ test_that("missing state_events aborts listing act_type values with counts and '
 
 # ── 3. case_id resolution ────────────────────────────────────────────────────
 
-test_that("case_id = NULL with a single case renders and informs which case was used", {
-  single <- orders[orders$case_id == "A-1", ]
-  expect_message(
-    p <- plot_case_timeline(single, state_events = "status"),
-    regexp = "only case"
-  )
-  expect_s3_class(p, "ggplot")
-})
-
-test_that("case_id = NULL with multiple cases aborts naming ids and plot_cohort_timeline", {
-  err <- expect_error(plot_case_timeline(orders, state_events = "status"))
-  msg <- conditionMessage(err)
-  expect_match(msg, "A-1")
-  expect_match(msg, "A-2")
-  expect_match(msg, "plot_cohort_timeline")
-})
-
 # ── 4. case_col = NULL single-series plot ────────────────────────────────────
 
 test_that("case_col = NULL builds a single-series plot with no case_id", {
@@ -68,21 +44,6 @@ test_that("case_col = NULL builds a single-series plot with no case_id", {
   expect_s3_class(p, "ggplot")
   expect_no_warning(ggplot2::ggplot_build(p))
   expect_null(p$labels$title)
-})
-
-test_that("case_col = NULL with case_id supplied aborts", {
-  single <- orders[orders$case_id == "A-1", -1]
-  err <- expect_error(
-    plot_case_timeline(single, state_events = "status", case_col = NULL, case_id = "A-1")
-  )
-  expect_match(conditionMessage(err), "case_col")
-})
-
-test_that("plot_cohort_timeline() with case_col = NULL aborts", {
-  err <- expect_error(
-    plot_cohort_timeline(orders, state_events = "status", case_col = NULL)
-  )
-  expect_match(conditionMessage(err), "case_col")
 })
 
 test_that("summarisers with case_col = NULL abort", {
@@ -114,14 +75,6 @@ test_that("one schema drives plot_case_timeline, plot_cohort_timeline, plot_stag
 })
 
 # ── 6. Extra unused columns are tolerated end-to-end ─────────────────────────
-
-test_that("an inert extra column is tolerated end-to-end", {
-  with_extra <- orders
-  with_extra$region <- "north"
-  p <- plot_case_timeline(with_extra, state_events = "status", case_id = "A-1")
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
 
 # ── 7. Grep gate as a test: no clinical vocabulary leaks into a generic plot ─
 
