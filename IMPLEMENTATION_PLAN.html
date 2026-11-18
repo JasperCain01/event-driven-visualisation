@@ -211,7 +211,7 @@ Stage 0.5  (defect fixes)  ✅ DONE — implemented pre-scaffolding with tests
 <ul><li>
 <code>journey_palette()</code> gains <code>palette_style = c("okabe", "brewer")</code>, default <code>"okabe"</code>.</li>
 <li>
-<code>"okabe"</code>, locations (fills): the 8 Okabe-Ito colours <strong>lightened 40% toward white</strong> via <code><a href="https://colorspace.R-Forge.R-project.org/reference/lighten.html" class="external-link">colorspace::lighten()</a></code> if available else <code>grDevices::colorRampPalette(c(col, "white"))(5)[3]</code> per colour (no new hard dependency).</li>
+<code>"okabe"</code>, locations (fills): the 8 Okabe-Ito colours <strong>lightened 40% toward white</strong> via <code><a href="https://zeileis.codeberg.page/colorspace/reference/lighten.html" class="external-link">colorspace::lighten()</a></code> if available else <code>grDevices::colorRampPalette(c(col, "white"))(5)[3]</code> per colour (no new hard dependency).</li>
 <li>
 <code>"okabe"</code>, events (points): the saturated Okabe-Ito originals <strong>offset by 4 positions</strong> (event 1 gets colour 5, wrapping) so co-indexed location/event pairs never share a hue.</li>
 <li>

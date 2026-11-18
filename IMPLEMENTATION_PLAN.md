@@ -317,7 +317,7 @@ today’s matched-hue Set2/Dark2 problem. Corrected:
   default `"okabe"`.
 - `"okabe"`, locations (fills): the 8 Okabe-Ito colours **lightened 40%
   toward white** via
-  [`colorspace::lighten()`](https://colorspace.R-Forge.R-project.org/reference/lighten.html)
+  [`colorspace::lighten()`](https://zeileis.codeberg.page/colorspace/reference/lighten.html)
   if available else `grDevices::colorRampPalette(c(col, "white"))(5)[3]`
   per colour (no new hard dependency).
 - `"okabe"`, events (points): the saturated Okabe-Ito originals **offset
