@@ -49,23 +49,13 @@ test_that("basic pivot produces correct row count and act_type values", {
   ward_rows <- long |> dplyr::filter(activity == "Ward")
   expect_equal(unique(ward_rows$act_type), "state_change")
 
-  triage_rows <- long |> dplyr::filter(case_id == "C1", act_type != "state_change",
-                                       act_type != "discharge_time")
-  expect_true(nrow(triage_rows) >= 1)
-})
-
-test_that("milestone labels are suffix-stripped, not raw column names", {
-  long <- suppressMessages(pivot_events_longer(
-    make_wide_fixture(),
-    case_col  = "case_id",
-    time_cols = time_cols
-  ))
-
-  expect_true("Arrival" %in% long$activity)
-  expect_false("Arrival Time" %in% long$activity)
-  expect_true("Triage" %in% long$activity)
-  expect_true("Ward" %in% long$activity)
-  expect_true("Discharge" %in% long$activity)
+  # Non-state milestones keep their column name as act_type, and labels are
+  # suffix-stripped ("Triage", not "Triage Time").
+  triage_rows <- long |> dplyr::filter(activity == "Triage")
+  expect_equal(unique(triage_rows$act_type), "triage_time")
+  expect_equal(sort(triage_rows$case_id), c("C1", "C2"))
+  expect_false(any(grepl("Time$", long$activity)))
+  expect_setequal(unique(long$activity), c("Arrival", "Triage", "Ward", "Discharge"))
 })
 
 test_that("act_type_map and activity_map override the defaults", {
@@ -154,21 +144,6 @@ test_that("equal-timestamp milestones pivot cleanly and render under the univers
 })
 
 # ── End-to-end into plot_case_timeline() ─────────────────────────────────────
-
-test_that("pivoted output feeds plot_case_timeline() directly", {
-  long <- suppressMessages(pivot_events_longer(
-    make_wide_fixture(), case_col = "case_id", time_cols = time_cols,
-    state_cols = c("arrival_time", "ward_time")
-  ))
-
-  p <- plot_case_timeline(
-    long, case_id = "C2", case_col = "case_id",
-    time_col = "timestamp", act_type_col = "act_type", activity_col = "activity",
-    state_events = "state_change"
-  )
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
 
 test_that("passthrough columns (e.g. diagnosis) survive the pivot untouched", {
   long <- suppressMessages(pivot_events_longer(

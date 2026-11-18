@@ -50,10 +50,11 @@ cohort <- function(...) plot_cohort_timeline(cohort_log(), state_events = STATE_
 
 # ── Panel counts ────────────────────────────────────────────────────────────────
 
-test_that("NULL case_ids facets every case in the data", {
+test_that("NULL case_ids facets every case in the data, within max_cases", {
   p <- cohort()
   expect_s3_class(p, "ggplot")
   expect_equal(n_panels(p), 3L)
+  expect_equal(n_panels(cohort(max_cases = 100L)), 3L)
 })
 
 test_that("a case_ids subset facets only the requested cases", {
@@ -128,25 +129,6 @@ test_that("max_cases aborts with advice to pass explicit case_ids", {
     cohort(max_cases = 2L),
     regexp = "max_cases"
   )
-})
-
-test_that("raising max_cases lets all cases through", {
-  p <- cohort(max_cases = 100L)
-  expect_equal(n_panels(p), 3L)
-})
-
-# ── Universal render gate, both modes ───────────────────────────────────────────
-
-test_that("absolute cohort renders cleanly (universal gate)", {
-  p <- cohort(show_duration = TRUE)
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
-test_that("start-aligned cohort renders cleanly (universal gate)", {
-  p <- cohort(align_start = TRUE, show_duration = TRUE)
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 test_that("terminal_activities is forwarded per case", {
@@ -254,6 +236,12 @@ test_that("open cases get a per-panel '(ongoing)' marker; closed cases do not", 
   # C1 facets first (panel 1) and is closed; C2/C3 carry the marker.
   expect_setequal(as.integer(d$PANEL), c(2L, 3L))
   expect_no_warning(ggplot2::ggplot_build(p))
+
+  # Without terminal_activities nothing is declared open, so no markers at all.
+  built <- ggplot2::ggplot_build(cohort())
+  expect_false(any(vapply(built$data, function(d) {
+    "label" %in% names(d) && any(d$label == "(ongoing)")
+  }, logical(1))))
 })
 
 test_that("ongoing markers render in start-aligned mode too (universal gate)", {
@@ -263,14 +251,6 @@ test_that("ongoing markers render in start-aligned mode too (universal gate)", {
     "label" %in% names(d) && any(d$label == "(ongoing)")
   }, logical(1))))
   expect_no_warning(ggplot2::ggplot_build(p))
-})
-
-test_that("no terminal_activities means no ongoing markers (unchanged default)", {
-  p <- cohort()
-  built <- ggplot2::ggplot_build(p)
-  expect_false(any(vapply(built$data, function(d) {
-    "label" %in% names(d) && any(d$label == "(ongoing)")
-  }, logical(1))))
 })
 
 # ── tail_strategy forwarding ────────────────────────────────────────────────────

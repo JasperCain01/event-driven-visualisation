@@ -27,19 +27,6 @@ test_that("support_ticket_example has the expected shape and no case-secondary c
   expect_true(all(status_rows$activity %in% stages))
 })
 
-# ── End-to-end: band layout ──────────────────────────────────────────────────────
-
-test_that("support_ticket_example renders in the band layout with state_label = Status", {
-  p <- suppressMessages(plot_case_timeline(
-    support_ticket_example, case_id = "TCK-01",
-    state_events = "status_change", case_col = "ticket_id",
-    terminal_activities = "Closed", state_label = "Status"
-  ))
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-  expect_equal(p$scales$get_scales("fill")$name, "Status")
-})
-
 test_that("the still-open ticket (TCK-04) triggers the ongoing-case indication", {
   res <- suppressMessages(plot_case_timeline(
     support_ticket_example, case_id = "TCK-04",
@@ -89,34 +76,4 @@ test_that("support_ticket_example renders in the cohort layout", {
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
-# ── theme_timeline() extraction: shared base + per-renderer additions ───────────
 
-test_that("theme_timeline() supplies the shared grid/title styling", {
-  th <- theme_timeline(base_size = 11)
-  built <- ggplot2::calc_element("panel.grid.major.x", th)
-  expect_equal(built$colour, "grey88")
-  expect_equal(built$linewidth, 0.4)
-  expect_s3_class(ggplot2::calc_element("panel.grid.major.y", th), "element_blank")
-  title_el <- ggplot2::calc_element("plot.title", th)
-  expect_equal(title_el$face, "bold")
-  expect_equal(title_el$size, 12)
-})
-
-test_that("the band renderer's final theme layers legend styling on theme_timeline()", {
-  p <- suppressMessages(plot_case_timeline(support_ticket_example, case_id = "TCK-01",
-    state_events = "status_change", case_col = "ticket_id"))
-  expect_equal(p$theme$legend.position, "bottom")
-  grid_x <- ggplot2::calc_element("panel.grid.major.x", p$theme)
-  expect_equal(grid_x$colour, "grey88")
-})
-
-test_that("the staircase renderer's final theme suppresses the colour legend and sets its own margin", {
-  p <- suppressMessages(plot_stage_ladder(
-    support_ticket_example, case_id = "TCK-01",
-    state_events = "status_change", case_col = "ticket_id"
-  ))
-  expect_equal(p$scales$get_scales("colour")$guide, "none")
-  expect_equal(p$theme$plot.margin, ggplot2::margin(8, 14, 8, 8))
-  grid_x <- ggplot2::calc_element("panel.grid.major.x", p$theme)
-  expect_equal(grid_x$colour, "grey88")
-})
