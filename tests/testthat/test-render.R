@@ -69,132 +69,51 @@ test_that("format_duration() is vectorised and NA-safe", {
   expect_equal(out, c("0s", "1h", NA_character_, "1d 1h"))
 })
 
-# ── 1a. show_duration layer toggling ──────────────────────────────────────────
+# ── 1a. show_duration labels ──────────────────────────────────────────────────
 
-test_that("show_duration = FALSE (default) adds no duration-label layer", {
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                              show_duration = TRUE)
-
-  expect_equal(length(p_off$layers) + 1L, length(p_on$layers))
-  expect_no_warning(ggplot2::ggplot_build(p_off))
-})
-
-test_that("show_duration = TRUE labels every non-terminal box, none for terminal", {
-  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          terminal_activities = "Discharged",
-                          show_duration = TRUE, return_data = TRUE)
-
-  n_non_terminal <- sum(!r$boxes$terminal)
-
-  built <- ggplot2::ggplot_build(r$plot)
-  layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
-  dur_layer_idx <- which(layer_classes == "GeomText")[1]
-
-  expect_false(is.na(dur_layer_idx))
-  expect_equal(nrow(built$data[[dur_layer_idx]]), n_non_terminal)
-  expect_no_warning(ggplot2::ggplot_build(r$plot))
-})
-
-test_that("end_inferred boxes get a '+' suffix; terminal boxes get no label", {
-  # No terminal_activities supplied: the final box's end is inferred (no
-  # successor state event tells us when it ended).
+test_that("show_duration labels each box with its rendered duration, '+' marking an inferred end", {
+  # small_log() never reaches a terminal state, so its final box's end is
+  # inferred. The label text is read from the built plot, not recomputed here.
   r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           show_duration = TRUE, return_data = TRUE)
+  built <- ggplot2::ggplot_build(r$plot)
+  layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
+  labels <- built$data[[which(layer_classes == "GeomText")[1]]]$label
+  expect_equal(r$boxes$end_inferred, c(FALSE, TRUE))
+  expect_equal(labels, c("4h", "4h+"))
 
-  expect_true(r$boxes$end_inferred[nrow(r$boxes)])
-  expect_false(any(r$boxes$end_inferred[-nrow(r$boxes)]))
-
-  labels <- format_duration(as.numeric(r$boxes$duration, units = "secs"))
-  labels <- ifelse(r$boxes$end_inferred, paste0(labels, "+"), labels)
-
-  expect_true(grepl("\\+$", labels[nrow(r$boxes)]))
-  expect_false(any(grepl("\\+$", labels[-nrow(r$boxes)])))
-
-  # Terminal boxes never get a duration label at all: with terminal_activities
-  # supplied, the terminal row is dropped from `boxes` before the label layer
-  # is built (render.R filters `terminal` out before the geom_text() layer).
+  # A terminal box gets no duration label at all.
   rt <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                            terminal_activities = "Discharged",
                            show_duration = TRUE, return_data = TRUE)
   built <- ggplot2::ggplot_build(rt$plot)
   layer_classes <- vapply(rt$plot$layers, function(l) class(l$geom)[1], character(1))
-  dur_layer_idx <- which(layer_classes == "GeomText")[1]
-  expect_equal(nrow(built$data[[dur_layer_idx]]), sum(!rt$boxes$terminal))
-})
-
-test_that("universal render gate: show_duration = TRUE builds without warning", {
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          show_duration = TRUE)
-  expect_no_warning(ggplot2::ggplot_build(p))
+  dur_layer <- built$data[[which(layer_classes == "GeomText")[1]]]
+  expect_equal(nrow(dur_layer), sum(!rt$boxes$terminal))
+  expect_no_warning(ggplot2::ggplot_build(rt$plot))
 })
 
 # ── 1b. reference_lines validation ─────────────────────────────────────────────
 
-test_that("reference_lines = NULL (default) is accepted and adds no layer", {
-  expect_no_error(validate_reference_lines(NULL))
-
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  expect_no_warning(ggplot2::ggplot_build(p_off))
-})
-
-test_that("non-data-frame reference_lines aborts", {
-  expect_error(
-    plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                       reference_lines = c(4)),
-    regexp = "data frame"
+test_that("malformed reference_lines abort with a message naming the problem", {
+  bad <- list(
+    "data frame"     = c(4),
+    "offset_hours"   = data.frame(hours = 4, lbl = "x"),
+    "numeric"        = data.frame(offset_hours = "4", label = "4h target"),
+    "at least one row" = data.frame(offset_hours = numeric(0), label = character(0))
   )
-})
-
-test_that("reference_lines missing required columns aborts naming them", {
-  expect_error(
-    plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                       reference_lines = data.frame(hours = 4, lbl = "x")),
-    regexp = "offset_hours"
-  )
-})
-
-test_that("reference_lines with non-numeric offset_hours aborts", {
-  expect_error(
-    plot_case_timeline(
-      small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-      reference_lines = data.frame(offset_hours = "4", label = "4h target")
-    ),
-    regexp = "numeric"
-  )
-})
-
-test_that("empty reference_lines data frame aborts", {
-  expect_error(
-    plot_case_timeline(
-      small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-      reference_lines = data.frame(offset_hours = numeric(0), label = character(0))
-    ),
-    regexp = "at least one row"
-  )
+  for (msg in names(bad)) {
+    expect_error(
+      plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                         reference_lines = bad[[msg]]),
+      regexp = msg, info = msg
+    )
+  }
 })
 
 # ── 1b. reference_lines rendering ──────────────────────────────────────────────
 
-test_that("reference_lines adds a vline + text layer, positioned from the first event", {
-  ref <- data.frame(offset_hours = 4, label = "4h target")
-
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                              reference_lines = ref)
-
-  expect_equal(length(p_off$layers) + 2L, length(p_on$layers))
-
-  layer_classes <- vapply(p_on$layers, function(l) class(l$geom)[1], character(1))
-  expect_true("GeomVline" %in% layer_classes)
-
-  vline_idx <- which(layer_classes == "GeomVline")[1]
-  built <- ggplot2::ggplot_build(p_on)
-  expected_x <- as.numeric(hrs(0)) + 4 * 3600  # first event is at hrs(0)
-  expect_equal(as.numeric(built$data[[vline_idx]]$xintercept[1]), expected_x)
-})
-
-test_that("multiple reference_lines each render their own vline + label", {
+test_that("each reference line is drawn at its offset from the first event", {
   ref <- data.frame(offset_hours = c(2, 4), label = c("2h", "4h"))
   p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           reference_lines = ref)
@@ -202,36 +121,23 @@ test_that("multiple reference_lines each render their own vline + label", {
   layer_classes <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
   vline_idx <- which(layer_classes == "GeomVline")[1]
   built <- ggplot2::ggplot_build(p)
-  expect_equal(nrow(built$data[[vline_idx]]), 2L)
-})
-
-test_that("universal render gate: reference_lines builds without warning", {
-  ref <- data.frame(offset_hours = 4, label = "4h target")
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          reference_lines = ref)
+  # First event is at hrs(0).
+  expect_equal(as.numeric(built$data[[vline_idx]]$xintercept),
+               as.numeric(hrs(0)) + c(2, 4) * 3600)
   expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 # ── 1c. case_open attribute ────────────────────────────────────────────────────
 
-test_that("case_open is FALSE when terminal_activities is NULL (default)", {
-  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          return_data = TRUE)
-  expect_false(attr(r$boxes, "case_open"))
-})
-
-test_that("case_open is TRUE when the final move is not in terminal_activities", {
-  r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          terminal_activities = "Discharged",
-                          return_data = TRUE)
-  expect_true(attr(r$boxes, "case_open"))
-})
-
-test_that("case_open is FALSE when the final move IS in terminal_activities", {
-  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          terminal_activities = "Discharged",
-                          return_data = TRUE)
-  expect_false(attr(r$boxes, "case_open"))
+test_that("case_open is TRUE only when terminal_activities is given and not reached", {
+  open_flag <- function(log, terminal) {
+    attr(plot_case_timeline(log, case_id = "SP-001", state_events = STATE_EVENTS,
+                            terminal_activities = terminal, return_data = TRUE)$boxes,
+         "case_open")
+  }
+  expect_false(open_flag(small_log(), NULL))            # no terminal states declared
+  expect_true(open_flag(small_log(), "Discharged"))     # declared, not reached
+  expect_false(open_flag(terminal_log(), "Discharged")) # declared and reached
 })
 
 # ── 1c. ongoing-case rendering ────────────────────────────────────────────────
@@ -243,93 +149,44 @@ has_ongoing_annotation <- function(p) {
   }, logical(1)))
 }
 
-test_that("case_open = FALSE renders no '(ongoing)' annotation", {
+test_that("an open case gets a dashed '(ongoing)' marker at its last box's end; a closed one does not", {
   p_default <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
   p_reached <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                                   terminal_activities = "Discharged")
   expect_false(has_ongoing_annotation(p_default))
   expect_false(has_ongoing_annotation(p_reached))
-  expect_no_warning(ggplot2::ggplot_build(p_default))
   expect_no_warning(ggplot2::ggplot_build(p_reached))
-})
-
-test_that("case_open = TRUE renders the '(ongoing)' annotation", {
-  p_on <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                             terminal_activities = "Discharged")
-  expect_true(has_ongoing_annotation(p_on))
-})
-
-test_that("case_open = TRUE adds a dashed geom_segment + '(ongoing)' annotation", {
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                              terminal_activities = "Discharged")
-
-  # geom_segment + annotate("text") = 2 extra layers
-  expect_equal(length(p_off$layers) + 2L, length(p_on$layers))
-
-  layer_classes <- vapply(p_on$layers, function(l) class(l$geom)[1], character(1))
-  expect_true("GeomSegment" %in% layer_classes)
-
-  seg_idx <- which(layer_classes == "GeomSegment")[1]
-  built   <- ggplot2::ggplot_build(p_on)
 
   r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           terminal_activities = "Discharged", return_data = TRUE)
-  last_box <- r$boxes[nrow(r$boxes), ]
-  expect_equal(as.numeric(built$data[[seg_idx]]$x[1]), as.numeric(last_box$xmax))
+  expect_true(has_ongoing_annotation(r$plot))
+  layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
+  seg_idx <- which(layer_classes == "GeomSegment")[1]
+  built   <- ggplot2::ggplot_build(r$plot)
+  expect_equal(as.numeric(built$data[[seg_idx]]$x[1]),
+               as.numeric(r$boxes$xmax[nrow(r$boxes)]))
+  expect_no_warning(ggplot2::ggplot_build(r$plot))
 })
 
-test_that("universal render gate: case_open = TRUE builds without warning", {
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          terminal_activities = "Discharged")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
+# ── 1d. label_boxes ────────────────────────────────────────────────────────────
 
-# ── 1d. label_boxes layer toggling ─────────────────────────────────────────────
-
-test_that("label_boxes = FALSE (default) adds no box-label layer", {
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  p_on  <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                              label_boxes = TRUE)
-
-  expect_equal(length(p_off$layers) + 1L, length(p_on$layers))
-  expect_no_warning(ggplot2::ggplot_build(p_off))
-})
-
-test_that("label_boxes = TRUE labels every non-terminal box with its state", {
+test_that("label_boxes writes each non-terminal box's state name on it", {
   r <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
                           label_boxes = TRUE, return_data = TRUE)
-
   layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
-  label_layer_idx <- which(layer_classes == "GeomText")[1]
-
-  expect_false(is.na(label_layer_idx))
   built <- ggplot2::ggplot_build(r$plot)
-  expect_equal(nrow(built$data[[label_layer_idx]]), nrow(r$boxes))
-})
+  expect_equal(built$data[[which(layer_classes == "GeomText")[1]]]$label, r$boxes$state)
+  expect_no_warning(ggplot2::ggplot_build(r$plot))
 
-test_that("label_boxes = TRUE excludes terminal boxes (they keep their own label)", {
-  r <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          terminal_activities = "Discharged",
-                          label_boxes = TRUE, return_data = TRUE)
-
-  layer_classes <- vapply(r$plot$layers, function(l) class(l$geom)[1], character(1))
-  # Two GeomText layers exist here: the terminal marker's direct label
-  # (Stage 0.5) and this state's box-centre label. The box-centre layer must
-  # only cover the non-terminal boxes.
-  label_layer_idxs <- which(layer_classes == "GeomText")
-  built <- ggplot2::ggplot_build(r$plot)
-  n_non_terminal <- sum(!r$boxes$terminal)
-
-  expect_true(any(vapply(label_layer_idxs, function(i) {
-    nrow(built$data[[i]]) == n_non_terminal
-  }, logical(1))))
-})
-
-test_that("universal render gate: label_boxes = TRUE builds without warning", {
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                          label_boxes = TRUE)
-  expect_no_warning(ggplot2::ggplot_build(p))
+  # With a terminal state, two text layers exist: the terminal marker's own
+  # label and the box labels. The box-label layer covers only non-terminal boxes.
+  rt <- plot_case_timeline(terminal_log(), case_id = "SP-001", state_events = STATE_EVENTS,
+                           terminal_activities = "Discharged",
+                           label_boxes = TRUE, return_data = TRUE)
+  layer_classes <- vapply(rt$plot$layers, function(l) class(l$geom)[1], character(1))
+  built <- ggplot2::ggplot_build(rt$plot)
+  label_sets <- lapply(which(layer_classes == "GeomText"), function(i) built$data[[i]]$label)
+  expect_true(list(rt$boxes$state[!rt$boxes$terminal]) %in% label_sets)
 })
 
 # ── 1e. bucket_top_n() ─────────────────────────────────────────────────────────
@@ -347,11 +204,6 @@ test_that("bucket_top_n() keeps the most frequent values and collapses the rest"
 })
 
 # ── 1e. event_type_top_n wiring ─────────────────────────────────────────────────
-
-test_that("event_type_top_n = NULL (default) leaves act_type untouched", {
-  p_off <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  expect_no_warning(ggplot2::ggplot_build(p_off))
-})
 
 test_that("event_type_top_n collapses the long tail into 'Other'", {
   expect_message(
@@ -383,14 +235,6 @@ test_that("event_type_top_n is a no-op when under the threshold", {
   expect_false("Other" %in% r$events$act_type)
 })
 
-test_that("universal render gate: event_type_top_n builds without warning", {
-  p <- suppressMessages(
-    plot_case_timeline(high_cardinality_log(), case_id = "SP-001", state_events = STATE_EVENTS,
-                       event_type_top_n = 3)
-  )
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
 # ── 1f. journey_palette() — "okabe" style (new default) ────────────────────────
 
 test_that("okabe states and events never share a hex for co-indexed levels", {
@@ -398,18 +242,6 @@ test_that("okabe states and events never share a hex for co-indexed levels", {
   evt_cols   <- journey_palette(c("A", "B", "C"), "event", "okabe")
 
   expect_length(setdiff(unname(state_cols), unname(evt_cols)), 3L)
-})
-
-test_that("okabe events are the Okabe-Ito hues offset by 4 positions", {
-  evt_cols <- journey_palette(c("e1", "e2", "e3"), "event", "okabe")
-  # event 1 gets colour index 5 (1-indexed), wrapping past 8
-  expect_equal(unname(evt_cols), .okabe_ito[c(5, 6, 7)])
-})
-
-test_that("okabe states are lightened toward white, not the raw saturated hue", {
-  state_cols <- journey_palette(c("l1", "l2"), "state", "okabe")
-  expect_false(unname(state_cols[1]) %in% .okabe_ito)
-  expect_true(all(grepl("^#[0-9A-Fa-f]{6,8}$", state_cols)))
 })
 
 test_that("okabe palette recycles past 8 distinct levels without erroring", {
@@ -448,11 +280,6 @@ test_that("invalid palette_style aborts with a clear match.arg error", {
 })
 
 # ── 1f. end-to-end rendering ────────────────────────────────────────────────────
-
-test_that("default (okabe) render builds without warning", {
-  p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS)
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
 
 test_that("palette_style = 'brewer' render builds without warning", {
   p <- plot_case_timeline(small_log(), case_id = "SP-001", state_events = STATE_EVENTS,

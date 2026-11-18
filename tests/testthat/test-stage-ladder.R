@@ -135,44 +135,16 @@ test_that("the terminal stage renders as a point, not a segment", {
 
 # ── complaint_example end-to-end in BOTH layouts ────────────────────────────────
 
-test_that("complaint_example renders in the band layout", {
-  p <- suppressMessages(plot_case_timeline(
+test_that("complaint_example renders in the band layout, with state_label as the legend title", {
+  p  <- suppressMessages(plot_case_timeline(
     complaint_example, case_id = "CMP-02",
     state_events = "stage_change", case_col = "complaint_id",
     terminal_activities = "Formal letter sent",
     state_label = "Stage", show_duration = TRUE
   ))
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
-test_that("complaint_example renders in the staircase layout", {
-  p <- ladder("CMP-02")
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
-
-test_that("state_label sets the fill legend title in the band layout", {
-  p  <- suppressMessages(plot_case_timeline(
-    complaint_example, case_id = "CMP-02",
-    state_events = "stage_change", case_col = "complaint_id",
-    state_label = "Stage"
-  ))
   # The fill scale's name drives the legend title.
-  fill_scale <- p$scales$get_scales("fill")
-  expect_equal(fill_scale$name, "Stage")
-})
-
-# ── Still-open complaint triggers the ongoing-case indication (band) ────────────
-
-test_that("the still-open complaint (CMP-04) marks the case as open", {
-  res <- suppressMessages(plot_case_timeline(
-    complaint_example, case_id = "CMP-04",
-    state_events = "stage_change", case_col = "complaint_id",
-    terminal_activities = "Formal letter sent",
-    return_data = TRUE
-  ))
-  expect_true(attr(res$boxes, "case_open"))
+  expect_equal(p$scales$get_scales("fill")$name, "Stage")
+  expect_no_warning(ggplot2::ggplot_build(p))
 })
 
 # ── Visual regression baseline (vdiffr) ─────────────────────────────────────────

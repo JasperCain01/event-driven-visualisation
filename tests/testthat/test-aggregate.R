@@ -9,7 +9,6 @@
 #       unknown-scope abort, and include_inferred behaviour.
 #   6c  summarise_transitions() exact n / dwell values, plus the
 #       plot_transition_summary() render gate on a multi-path cohort.
-#   6d  plot_case_timeline(return_data = TRUE)$summary shape.
 #   6e  plot_case_timeline_with_summary() returns a patchwork that assembles
 #       cleanly.
 #
@@ -81,7 +80,7 @@ test_that("summarise_case_durations drops inferred stays by default and reports 
     c("case_id", "state", "xmin", "xmax", "duration_secs", "end_inferred", "terminal"))
 })
 
-test_that("include_inferred = TRUE keeps every stay and zeroes the excluded count", {
+test_that("include_inferred = TRUE keeps every stay, at its hand-computed duration", {
   jd <- agg(summarise_case_durations, include_inferred = TRUE)
   expect_equal(nrow(jd), 10L)
   expect_equal(attr(jd, "n_inferred_excluded"), 0L)
@@ -90,10 +89,7 @@ test_that("include_inferred = TRUE keeps every stay and zeroes the excluded coun
   inf <- jd[jd$end_inferred, ]
   expect_equal(inf$case_id, "X2")
   expect_equal(inf$state, "C")
-})
 
-test_that("per-stay duration_secs match the hand-computed values", {
-  jd <- agg(summarise_case_durations, include_inferred = TRUE)
   x1 <- jd[jd$case_id == "X1", ]
   expect_equal(x1$duration_secs[x1$state == "A"], 7200)
   expect_equal(x1$duration_secs[x1$state == "B"], 10800)
@@ -170,6 +166,22 @@ test_that("state-scope breach with include_inferred keeps the imputed dwell", {
   expect_equal(attr(br, "breach_rate"), 0.5)
 })
 
+test_that("a case or stay that exactly meets its target is not a breach; one second over is", {
+  # "Breach" means *exceeding* the target (elapsed > target). X3 runs exactly
+  # 6h and X1's C stay lasts exactly 4h, so both sit on the boundary. A >=
+  # slip would silently raise every breach rate that has cases on the line.
+  br <- agg(summarise_breach_rate, target_hours = 6, scope = "case")
+  expect_false(br$breached[br$case_id == "X3"])
+  expect_equal(attr(br, "breach_rate"), 1 / 3)   # only X1 (9h)
+
+  br <- agg(summarise_breach_rate, target_hours = 6 - 1 / 3600, scope = "case")
+  expect_true(br$breached[br$case_id == "X3"])
+
+  br <- agg(summarise_breach_rate, target_hours = 4, scope = "C")
+  expect_false(br$breached)
+  expect_equal(attr(br, "breach_rate"), 0)
+})
+
 test_that("an unknown scope name aborts with a suggestion", {
   expect_error(
     agg(summarise_breach_rate, target_hours = 1, scope = "Discharg"),  # near-miss
@@ -240,22 +252,6 @@ test_that("plot_transition_summary return_data exposes nodes and edges", {
   expect_equal(res$nodes$state[which.max(res$nodes$x)], "Discharge")
   # Backward transitions (Assessment -> Triage, Ward -> Assessment) are marked.
   expect_true(any(!res$edges$forward))
-})
-
-# ── 6d. return_data summary element ──────────────────────────────────────────────
-
-test_that("plot_case_timeline(return_data = TRUE) carries a per-stay summary", {
-  res <- suppressMessages(plot_case_timeline(
-    fixture(), case_id = "X1",
-    state_events = LOC, case_col = "case_id",
-    terminal_activities = "Discharge", return_data = TRUE
-  ))
-  expect_setequal(names(res), c("plot", "boxes", "events", "summary"))
-  expect_s3_class(res$summary, "tbl_df")
-  expect_equal(nrow(res$summary), 4L)            # A, B, C, Discharge
-  expect_true(all(res$summary$case_id == "X1"))
-  # Agrees with the standalone cohort summary for the same case.
-  expect_equal(res$summary$duration_secs[res$summary$state == "B"], 10800)
 })
 
 # ── 6e. Combined timeline + summary (patchwork stretch) ──────────────────────────

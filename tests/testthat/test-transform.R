@@ -42,27 +42,21 @@ standard_log <- function() {
 
 # ── derive_state_boxes ──────────────────────────────────────────────────────────
 
-test_that("standard log produces correct number of boxes", {
-  boxes <- derive_state_boxes(standard_log(), cols, state_evts)
-  expect_equal(nrow(boxes), 3L)
-})
-
-test_that("box xmin values match state event timestamps", {
-  boxes <- derive_state_boxes(standard_log(), cols, state_evts)
-  expect_equal(boxes$xmin, c(hrs(0), hrs(4), hrs(10)))
-})
-
-test_that("non-final box xmax equals next state's xmin", {
-  boxes <- derive_state_boxes(standard_log(), cols, state_evts)
-  expect_equal(boxes$xmax[1], hrs(4))
-  expect_equal(boxes$xmax[2], hrs(10))
-})
-
-test_that("final box xmax extends to the last event (tail_strategy = 'last_event')", {
+test_that("a standard log produces one box per state, each ending where the next begins", {
+  # One comparison covers the box count, the state names (from the activity
+  # column), every start, every non-final end (= the next start), and the
+  # final end (= the last event, under tail_strategy = "last_event").
   boxes <- derive_state_boxes(standard_log(), cols, state_evts,
                               tail_strategy = "last_event")
-  # Last event in the case is at hrs(12)
-  expect_equal(boxes$xmax[3], hrs(12))
+  expect_equal(
+    boxes[c("state", "xmin", "xmax")],
+    tibble::tibble(state = c("ED", "Ward", "Discharge Lounge"),
+                   xmin  = c(hrs(0), hrs(4), hrs(10)),
+                   xmax  = c(hrs(4), hrs(10), hrs(12))),
+    ignore_attr = TRUE
+  )
+  # Only the final box's end is inferred: no later state event closes it.
+  expect_equal(boxes$end_inferred, c(FALSE, FALSE, TRUE))
 })
 
 test_that("final box uses median duration when last event IS the state event itself", {
@@ -89,19 +83,11 @@ test_that("zero-width box is nudged and a message is emitted", {
   expect_true(all(boxes$xmax > boxes$xmin))
 })
 
-test_that("state names come from the activity column", {
-  boxes <- derive_state_boxes(standard_log(), cols, state_evts)
-  expect_equal(boxes$state, c("ED", "Ward", "Discharge Lounge"))
-})
-
-test_that("assign_y_bands sets ymin = 0, ymax = box_height for band_index 0", {
+test_that("assign_y_bands stacks bands box_height + band_gap apart", {
   boxes <- derive_state_boxes(standard_log(), cols, state_evts, box_height = 1)
   expect_true(all(boxes$ymin == 0))
   expect_true(all(boxes$ymax == 1))
-})
 
-test_that("assign_y_bands offsets correctly for band_index = 1", {
-  boxes <- derive_state_boxes(standard_log(), cols, state_evts, box_height = 1)
   shifted <- assign_y_bands(boxes, box_height = 1, band_index = 1, band_gap = 0.2)
   expect_equal(shifted$ymin[1], 1.2)
   expect_equal(shifted$ymax[1], 2.2)
@@ -109,29 +95,13 @@ test_that("assign_y_bands offsets correctly for band_index = 1", {
 
 # ── derive_point_events ────────────────────────────────────────────────────────
 
-test_that("standard log produces 6 point events (non-state rows)", {
-  log   <- standard_log()
-  boxes <- derive_state_boxes(log, cols, state_evts)
-  evts  <- derive_point_events(log, boxes, cols, state_evts)$events
-  expect_equal(nrow(evts), 6L)
-})
-
-test_that("each event is assigned to the correct box", {
+test_that("every non-state row becomes a point event in the box that contains it", {
   log   <- standard_log()
   boxes <- derive_state_boxes(log, cols, state_evts)
   evts  <- derive_point_events(log, boxes, cols, state_evts)$events
 
-  # hrs(1) and hrs(2) → box 1 (ED: hrs(0)–hrs(4))
-  ed_events <- evts |> dplyr::filter(box_id == 1L)
-  expect_equal(nrow(ed_events), 2L)
-
-  # hrs(5) and hrs(6) → box 2 (Ward: hrs(4)–hrs(10))
-  ward_events <- evts |> dplyr::filter(box_id == 2L)
-  expect_equal(nrow(ward_events), 2L)
-
-  # hrs(11) and hrs(12) → box 3 (Discharge Lounge: hrs(10)–hrs(12))
-  dl_events <- evts |> dplyr::filter(box_id == 3L)
-  expect_equal(nrow(dl_events), 2L)
+  # hrs(1), hrs(2) -> ED; hrs(5), hrs(6) -> Ward; hrs(11), hrs(12) -> Discharge Lounge.
+  expect_equal(evts$box_id, c(1L, 1L, 2L, 2L, 3L, 3L))
 })
 
 test_that("event exactly at a box boundary belongs to the next box", {
@@ -153,34 +123,6 @@ test_that("event exactly at a box boundary belongs to the next box", {
   expect_equal(boundary_evt$box_id, 2L)
 })
 
-test_that("events before first state event trigger a before-first-state box", {
-  # Add an event before the ED arrival
-  log <- standard_log() |>
-    dplyr::add_row(
-      case_id = "SP-001", .orig_row = 0L,
-      timestamp = hrs(-1),
-      act_type  = "clerk_review",
-      activity  = "Pre-triage call"
-    ) |>
-    dplyr::arrange(timestamp)
-
-  boxes <- derive_state_boxes(log, cols, state_evts)
-
-  expect_message(
-    result <- derive_point_events(log, boxes, cols, state_evts),
-    regexp = "before first state"
-  )
-  evts <- result$events
-
-  # The before-first-state event should have box_id == 0
-  pre_evt <- evts |> dplyr::filter(box_id == 0L)
-  expect_equal(nrow(pre_evt), 1L)
-  expect_equal(pre_evt$activity, "Pre-triage call")
-
-  # A pre_box should be returned alongside the events
-  expect_false(is.null(result$pre_box))
-})
-
 test_that("returns empty tibble with correct columns when no point events exist", {
   # Log with only state events
   log <- standard_log() |>
@@ -197,14 +139,7 @@ test_that("returns empty tibble with correct columns when no point events exist"
 
 # ── build_journey_tables ───────────────────────────────────────────────────────
 
-test_that("build_journey_tables returns a list with boxes and events", {
-  tables <- build_journey_tables(standard_log(), cols, state_evts)
-  expect_named(tables, c("boxes", "events"))
-  expect_true(is.data.frame(tables$boxes))
-  expect_true(is.data.frame(tables$events))
-})
-
-test_that("before-first-state box is prepended to boxes when present", {
+test_that("events before the first state get a prepended before-first-state box", {
   log <- standard_log() |>
     dplyr::add_row(
       case_id = "SP-001", .orig_row = 0L,
@@ -214,13 +149,15 @@ test_that("before-first-state box is prepended to boxes when present", {
     ) |>
     dplyr::arrange(timestamp)
 
-  suppressMessages(
-    tables <- build_journey_tables(log, cols, state_evts)
+  expect_message(
+    tables <- build_journey_tables(log, cols, state_evts),
+    regexp = "before first state"
   )
 
-  # Should now have 4 boxes (before-first-state + 3 state boxes)
+  # 4 boxes: (before first state) + the 3 state boxes; the early event sits in box 0.
   expect_equal(nrow(tables$boxes), 4L)
   expect_equal(tables$boxes$state[1], "(before first state)")
+  expect_equal(tables$events$activity[tables$events$box_id == 0L], "Pre-call obs")
 })
 
 test_that("single state event produces one box", {

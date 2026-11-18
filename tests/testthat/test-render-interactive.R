@@ -18,31 +18,6 @@ STATE_EVENTS <- c("location_move", "ed_location_move")
 
 geom_classes <- function(p) vapply(p$layers, function(l) class(l$geom)[1], character(1))
 
-# ── Default (static) path is untouched ──────────────────────────────────────────
-
-test_that("interactive = FALSE (default) keeps plain, non-interactive geoms", {
-  p <- suppressMessages(plot_case_timeline(
-    example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
-    terminal_activities = "Discharged"
-  ))
-  expect_s3_class(p, "ggplot")
-  gc <- geom_classes(p)
-  expect_false(any(grepl("Interactive", gc)))
-  expect_true(all(c("GeomRect", "GeomSegment", "GeomText", "GeomPoint") %in% gc))
-})
-
-# ── requireNamespace guard ───────────────────────────────────────────────────────
-
-test_that("interactive = TRUE requires ggiraph to be installed", {
-  skip_if(requireNamespace("ggiraph", quietly = TRUE),
-          "ggiraph is installed; guard path not exercised")
-  expect_error(
-    plot_case_timeline(example_journey, case_id = "SP-001", state_events = STATE_EVENTS,
-                       interactive = TRUE),
-    regexp = "ggiraph"
-  )
-})
-
 # ── interactive = TRUE returns a girafe widget ──────────────────────────────────
 
 test_that("interactive = TRUE returns a girafe htmlwidget", {

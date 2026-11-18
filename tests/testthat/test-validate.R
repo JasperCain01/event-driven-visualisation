@@ -86,15 +86,12 @@ test_that("no matching state act_types aborts with near-match suggestion", {
 
 # ── 6. Empty activity on state event ─────────────────────────────────────────
 
-test_that("NA activity on a state event aborts", {
+test_that("NA or blank activity on a state event aborts", {
   log <- make_valid_log()
   log$activity[1] <- NA_character_   # first row is ed_location_move
   err <- expect_error(validate_event_log(log, cols, "SP-001", state_evts))
   expect_match(conditionMessage(err), "non-empty")
-})
 
-test_that("blank activity on a state event aborts", {
-  log <- make_valid_log()
   log$activity[1] <- "   "
   err <- expect_error(validate_event_log(log, cols, "SP-001", state_evts))
   expect_match(conditionMessage(err), "non-empty")
@@ -102,12 +99,16 @@ test_that("blank activity on a state event aborts", {
 
 # ── 7. Stable sort on duplicate timestamps ────────────────────────────────────
 
-test_that("duplicate timestamps are sorted stably (row order preserved within tie)", {
+test_that("the log is sorted ascending by time, stably within duplicate timestamps", {
+  log <- make_valid_log() |>
+    dplyr::arrange(dplyr::desc(timestamp))  # deliberately reversed
+  result <- validate_event_log(log, cols, "SP-001", state_evts)
+  expect_true(all(diff(as.numeric(result$timestamp)) >= 0))
+
+  # Give rows 2 and 3 the same timestamp: original row 2 must still precede row 3.
   log <- make_valid_log()
-  # Give rows 2 and 3 the same timestamp
   log$timestamp[3] <- log$timestamp[2]
   result <- validate_event_log(log, cols, "SP-001", state_evts)
-  # After stable sort, original row 2 should still precede original row 3
   tied <- result |> dplyr::filter(timestamp == log$timestamp[2])
   expect_equal(tied$activity, c("BP check", "Ward"))
 })
@@ -115,6 +116,9 @@ test_that("duplicate timestamps are sorted stably (row order preserved within ti
 # ── 8. Happy path ─────────────────────────────────────────────────────────────
 
 test_that("valid log returns a tibble for the correct case only", {
+  # The fixture's case column is literally named `case_id`, the same name as
+  # the function argument. dplyr::filter()'s data mask would resolve a bare
+  # `case_id` to the column, so this also guards that collision.
   log <- dplyr::bind_rows(
     make_valid_log(),
     make_valid_log() |> dplyr::mutate(case_id = "SP-002")
@@ -122,34 +126,6 @@ test_that("valid log returns a tibble for the correct case only", {
   result <- validate_event_log(log, cols, "SP-001", state_evts)
   expect_true(is.data.frame(result))
   expect_equal(unique(result$case_id), "SP-001")
-})
-
-test_that("returned tibble is sorted ascending by timestamp", {
-  log <- make_valid_log() |>
-    dplyr::arrange(dplyr::desc(timestamp))  # deliberately reversed
-  result <- validate_event_log(log, cols, "SP-001", state_evts)
-  expect_true(all(diff(as.numeric(result$timestamp)) >= 0))
-})
-
-# ── 9. Case column literally named "case_id" (data-mask collision) ─────────
-
-test_that("filtering works when the case column is itself named case_id", {
-  # dplyr::filter()'s data mask resolves a bare `case_id` against a data
-  # column of that name before the function argument; validate_event_log()
-  # must filter correctly regardless of what the case column is called.
-  log <- tibble::tibble(
-    case_id   = c("C1", "C1", "C2"),
-    timestamp = as.POSIXct(c("2024-01-01 08:00", "2024-01-01 09:00",
-                             "2024-01-01 08:00"), tz = "UTC"),
-    act_type  = c("location_move", "obs", "location_move"),
-    activity  = c("ED", "BP check", "ED")
-  )
-  cols2 <- list(time = "timestamp", act_type = "act_type",
-               activity = "activity", case = "case_id")
-
-  result <- validate_event_log(log, cols2, "C1", state_evts)
-  expect_equal(unique(result$case_id), "C1")
-  expect_equal(nrow(result), 2)
 })
 
 # ── 10. Case resolution (§4.3) ────────────────────────────────────────────────

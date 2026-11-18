@@ -57,13 +57,7 @@ test_that("lane y positions match the hand-computed band centres", {
   expect_equal(y_of("Bloods"),    3.95)
   # Second Nursing event lands back on the Nursing lane.
   expect_equal(y_of("Obs 2"),     1.85)
-})
-
-test_that("lane column is stored as a factor in first-appearance order", {
-  log   <- lane_log()
-  boxes <- derive_state_boxes(log, cols_lane, loc_cats, box_height = 1)
-  evts  <- derive_point_events(log, boxes, cols_lane, loc_cats, box_height = 1)$events
-
+  # Lanes are stored as a factor in first-appearance order.
   expect_true(is.factor(evts$lane))
   expect_equal(levels(evts$lane), c("Nursing", "Medical", "Diagnostics"))
 })
@@ -141,28 +135,18 @@ plot_lane_log <- function() {
 
 # ── Conditional y-axis visibility ───────────────────────────────────────────────
 
-test_that("y-axis text/ticks stay blank without lanes", {
+test_that("y-axis text/ticks are blank without lanes and visible with them", {
   p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats)
   expect_true(inherits(p$theme$axis.text.y,  "element_blank"))
   expect_true(inherits(p$theme$axis.ticks.y, "element_blank"))
-})
 
-test_that("y-axis text/ticks become visible with lanes", {
   p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
                           lane_col = "lane")
-  expect_false(inherits(p$theme$axis.text.y,  "element_blank"))
-  expect_false(inherits(p$theme$axis.ticks.y, "element_blank"))
   expect_true(inherits(p$theme$axis.text.y, "element_text"))
+  expect_false(inherits(p$theme$axis.ticks.y, "element_blank"))
 })
 
 # ── Universal render gate ───────────────────────────────────────────────────────
-
-test_that("lanes render cleanly (universal gate)", {
-  p <- plot_case_timeline(plot_lane_log(), case_id = "SP-001", state_events = loc_cats,
-                          lane_col = "lane")
-  expect_s3_class(p, "ggplot")
-  expect_no_warning(ggplot2::ggplot_build(p))
-})
 
 test_that("lanes + duration labels + reference lines render together (gate)", {
   p <- plot_case_timeline(
