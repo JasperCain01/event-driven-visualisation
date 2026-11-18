@@ -166,6 +166,22 @@ test_that("state-scope breach with include_inferred keeps the imputed dwell", {
   expect_equal(attr(br, "breach_rate"), 0.5)
 })
 
+test_that("a case or stay that exactly meets its target is not a breach; one second over is", {
+  # "Breach" means *exceeding* the target (elapsed > target). X3 runs exactly
+  # 6h and X1's C stay lasts exactly 4h, so both sit on the boundary. A >=
+  # slip would silently raise every breach rate that has cases on the line.
+  br <- agg(summarise_breach_rate, target_hours = 6, scope = "case")
+  expect_false(br$breached[br$case_id == "X3"])
+  expect_equal(attr(br, "breach_rate"), 1 / 3)   # only X1 (9h)
+
+  br <- agg(summarise_breach_rate, target_hours = 6 - 1 / 3600, scope = "case")
+  expect_true(br$breached[br$case_id == "X3"])
+
+  br <- agg(summarise_breach_rate, target_hours = 4, scope = "C")
+  expect_false(br$breached)
+  expect_equal(attr(br, "breach_rate"), 0)
+})
+
 test_that("an unknown scope name aborts with a suggestion", {
   expect_error(
     agg(summarise_breach_rate, target_hours = 1, scope = "Discharg"),  # near-miss
