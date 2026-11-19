@@ -15,7 +15,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 3.5)
 Imports: dplyr, tibble, ggplot2 (>= 3.4.0), ggrepel, cli, lubridate, rlang, stats, utils, tidyr
-Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown, covr, pkgdown
+Suggests: testthat (>= 3.0.0), RColorBrewer, colorspace, ggiraph, patchwork, vdiffr, knitr, rmarkdown, pkgdown
 Config/testthat/edition: 3
 LazyData: true
 RoxygenNote: 7.3.1

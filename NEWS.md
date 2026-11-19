@@ -1,3 +1,8 @@
+# eventviz (development version)
+
+* Removed the `test-coverage` CI workflow and its Codecov configuration.
+  `R-CMD-check` runs the full test suite on every push and pull request.
+
 # eventviz 0.2.0
 
 A generic-core redesign: a first-time user with any timestamped event log

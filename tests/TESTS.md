@@ -1,6 +1,6 @@
 # What the tests protect
 
-There are 157 `test_that()` blocks in `tests/testthat/`. Run them with `devtools::test()`; CI runs them under `R CMD check` and the coverage workflow.
+There are 157 `test_that()` blocks in `tests/testthat/`. Run them with `devtools::test()`; CI runs them under `R CMD check`.
 
 ## How the suite is organised
 
