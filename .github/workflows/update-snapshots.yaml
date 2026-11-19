@@ -4,8 +4,8 @@
 # The SVG baselines under tests/testthat/_snaps are pixel-exact renders, so
 # they are pinned to the R version + ggplot2/svglite/font stack that produced
 # them. CI tracks R 'release' and current CRAN, which means every meaningful
-# upgrade of that stack changes the rendered SVGs and turns R-CMD-check and
-# test-coverage red with "Snapshot of `testcase` has changed" for every
+# upgrade of that stack changes the rendered SVGs and turns R-CMD-check red
+# with "Snapshot of `testcase` has changed" for every
 # baseline, even though all functional tests pass.
 #
 # When that happens (and only then):
